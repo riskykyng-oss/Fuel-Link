@@ -16,11 +16,18 @@ export type SupplierProfile = {
   vehicle_registration: string;
   tanker_capacity_litres: number;
   services_offered: string;
+  provider_type: "fuel_station" | "garage";
+  verification_status: "pending" | "verified" | "rejected";
+  rejection_reason: string | null;
+  callout_fee: number;
+  labour_rate: number;
   is_verified: boolean;
   is_online: boolean;
   rating: number;
   completed_jobs: number;
   total_earnings: number;
+  fuel_stock_petrol: number;
+  fuel_stock_diesel: number;
   current_lat: number | null;
   current_lng: number | null;
 };
@@ -34,6 +41,7 @@ export type User = {
   theme: string;
   avatar_seed: string;
   created_at: string;
+  phone_verified: boolean;
   vehicles: Vehicle[];
   supplier_profile: SupplierProfile | null;
 };
@@ -73,6 +81,14 @@ export type ServiceType =
   | "lockout"
   | "mechanic";
 
+export type SymptomType =
+  | "out_of_fuel"
+  | "wont_start"
+  | "flat_tyre"
+  | "cant_move"
+  | "locked_out"
+  | "something_else";
+
 export type ServiceItem = {
   id: ServiceType;
   name: string;
@@ -80,6 +96,14 @@ export type ServiceItem = {
   icon: string;
   unit: string;
   callout_fee: number;
+};
+
+export type QuoteProvider = {
+  name: string;
+  distance_km: number;
+  eta_minutes: number;
+  is_verified: boolean;
+  rating: number | null;
 };
 
 export type Quote = {
@@ -93,15 +117,28 @@ export type Quote = {
   currency: string;
   breakdown_note: string;
   station: Station | null;
+  coverage: boolean;
+  providers: QuoteProvider[];
+  nearest_stations: Station[];
+};
+
+export type Coverage = {
+  covered: boolean;
+  message: string;
+  est_response_min: number | null;
+  stations: Station[];
 };
 
 export type OrderStatus =
   | "pending"
+  | "bidding"
+  | "offered"
   | "accepted"
   | "in_transit"
   | "arrived"
   | "delivered"
-  | "cancelled";
+  | "cancelled"
+  | "declined";
 
 export type Order = {
   id: number;
@@ -109,9 +146,9 @@ export type Order = {
   service_type: ServiceType;
   fuel_type: string | null;
   quantity_litres: number;
-  pickup_lat: number;
-  pickup_lng: number;
-  pickup_address: string;
+  pickup_lat: number | null;
+  pickup_lng: number | null;
+  pickup_address: string | null;
   notes: string | null;
   distance_km: number;
   fuel_cost: number;
@@ -121,13 +158,38 @@ export type Order = {
   status: OrderStatus;
   eta_minutes: number;
   rating: number | null;
+  handover_code: string | null;
+  provider_staff_id: string | null;
+  sealed_container_id: string | null;
+  offer_expires_at: string | null;
+  payout_status: string | null;
+  provider_id: number | null;
+  photo_url: string | null;
   created_at: string;
+  symptom: SymptomType | null;
+  symptom_answer: string | null;
+  vehicle_id: number | null;
   customer: { id: number; full_name: string; phone_number: string };
   supplier: { id: number; full_name: string; phone_number: string } | null;
   station: Station | null;
   payment_status: string | null;
   supplier_lat: number | null;
   supplier_lng: number | null;
+};
+
+export type Bid = {
+  id: number;
+  order_id: number;
+  supplier_id: number;
+  proposed_amount: number;
+  note: string | null;
+  distance_km: number;
+  status: string;
+  created_at: string;
+  supplier_name: string | null;
+  supplier_company: string | null;
+  supplier_verified: boolean;
+  supplier_rating: number | null;
 };
 
 export type PaymentMethod = {
@@ -165,6 +227,9 @@ export type TrackingFrame = {
   eta_minutes: number;
   supplier_name: string | null;
   supplier_phone: string | null;
+  provider_verified: boolean;
+  provider_staff_id: string | null;
+  handover_code: string | null;
 };
 
 export type SupplierSummary = {
@@ -173,11 +238,73 @@ export type SupplierSummary = {
   rating: number;
   completed_jobs: number;
   total_earnings: number;
+  earnings_today: number;
   litres_delivered: number;
+  fuel_stock_petrol: number;
+  fuel_stock_diesel: number;
+  tanker_capacity_litres: number;
+  response_rate: number;
   open_requests: number;
+  petrol_price: number;
+  diesel_price: number;
+  cap_petrol: number;
+  cap_diesel: number;
+  price_verified_at: string | null;
+  price_is_live: boolean;
+  staff_on_shift: number;
+  staff_available: number;
+  containers_ready: number;
+  containers_in_use: number;
+  containers_total: number;
+  payout_held: number;
+  payout_released: number;
+  payout_disputed: number;
+  disputes_open: number;
+};
+
+export type SealedContainer = {
+  serial: string;
+  capacity_litres: number;
+  status: "available" | "in_use" | "returned" | "unusable";
+};
+
+export type DisputeMessage = {
+  id: number;
+  sender_id: number;
+  sender_name: string | null;
+  sender_role: string | null;
+  body: string;
+  created_at: string;
+};
+
+export type Dispute = {
+  id: number;
+  order_id: number;
+  reference: string | null;
+  reason: string;
+  status: "open" | "resolved" | "closed";
+  created_at: string;
+  resolved_at: string | null;
+  messages: DisputeMessage[];
+};
+
+export type Staff = {
+  id: number;
+  provider_id: number;
+  full_name: string;
+  phone_number: string;
+  staff_id: string;
+  role_label: string;
+  shift_state: string;
+  is_active: boolean;
+  created_at: string;
 };
 
 const TOKEN_KEY = "fuellink.token";
+
+/** Optional absolute API origin for production (Vercel frontend -> hosted
+ * backend). Empty in dev, where Vite proxies /api to localhost:8000. */
+const API_BASE: string = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
 
 export const tokenStore = {
   get: () => localStorage.getItem(TOKEN_KEY),
@@ -197,7 +324,7 @@ export class ApiError extends Error {
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = tokenStore.get();
-  const res = await fetch(path, {
+  const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
@@ -229,6 +356,23 @@ const post = <T,>(path: string, body?: unknown) =>
 
 export type AuthResponse = { access_token: string; token_type: string; user: User };
 
+export type CodeRequestResponse = {
+  message: string;
+  lifetime_s: number;
+  resend_after_s: number;
+  dev_code: string | null;
+};
+
+export type CodeVerifyResponse = {
+  verified: boolean;
+  purpose: "signup" | "reset";
+  reset_token?: string;
+};
+
+export type PasswordResetResponse = { access_token: string; token_type: string; user: User };
+
+export type StaffToken = { access_token: string; token_type: string; staff: Staff };
+
 export const api = {
   health: () => request<{ status: string; payments_mode: string }>("/api/health"),
 
@@ -245,6 +389,31 @@ export const api = {
 
   setTheme: (theme: string) =>
     request<User>("/api/auth/me/theme", { method: "PATCH", body: JSON.stringify({ theme }) }),
+
+  updateSupplierProfile: (body: Record<string, unknown>) =>
+    request<User>("/api/auth/me/supplier", { method: "PATCH", body: JSON.stringify(body) }),
+
+  requestCode: (phone_number: string, purpose: "signup" | "reset") =>
+    post<CodeRequestResponse>("/api/auth/code/request", { phone_number, purpose }),
+
+  verifyCode: (phone_number: string, code: string, purpose: "signup" | "reset") =>
+    post<CodeVerifyResponse>("/api/auth/code/verify", { phone_number, code, purpose }),
+
+  passwordReset: (reset_token: string, new_password: string) =>
+    post<PasswordResetResponse>("/api/auth/code/password-reset", { reset_token, new_password }),
+
+  coverage: (lat: number, lng: number) => post<Coverage>("/api/coverage", { lat, lng }),
+
+  vehicles: () => request<Vehicle[]>("/api/vehicles"),
+
+  createVehicle: (body: Record<string, unknown>) =>
+    post<Vehicle>("/api/vehicles", body),
+
+  updateVehicle: (id: number, body: Record<string, unknown>) =>
+    request<Vehicle>(`/api/vehicles/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+
+  deleteVehicle: (id: number) => request<void>(`/api/vehicles/${id}`, { method: "DELETE" }),
+
 
   stationsNearby: (lat: number, lng: number, fuelType?: string) =>
     request<Station[]>(
@@ -265,14 +434,22 @@ export const api = {
 
   availableJobs: () => request<Order[]>("/api/orders/available"),
 
+  offers: () => request<Order[]>("/api/orders/offers"),
+
   order: (id: number) => request<Order>(`/api/orders/${id}`),
 
   acceptOrder: (id: number) => post<Order>(`/api/orders/${id}/accept`),
 
-  setOrderStatus: (id: number, status: OrderStatus) =>
+  rejectOrder: (id: number) => post<Order>(`/api/orders/${id}/reject`),
+
+  setOrderStatus: (id: number, status: OrderStatus, handoverCode?: string, sealId?: string) =>
     request<Order>(`/api/orders/${id}/status`, {
       method: "PATCH",
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({
+        status,
+        handover_code: handoverCode ?? null,
+        seal_id: sealId ?? null,
+      }),
     }),
 
   rateOrder: (id: number, rating: number) => post<Order>(`/api/orders/${id}/rate`, { rating }),
@@ -282,6 +459,20 @@ export const api = {
   setOnline: (is_online: boolean) => post<void>("/api/supplier/online", { is_online }),
 
   supplierSummary: () => request<SupplierSummary>("/api/supplier/summary"),
+
+  supplierContainers: () =>
+    request<{ containers: SealedContainer[] }>("/api/supplier/containers"),
+
+  disputes: () => request<Dispute[]>("/api/disputes/mine"),
+
+  replyToDispute: (disputeId: number, body: string) =>
+    post<Dispute>(`/api/disputes/${disputeId}/messages`, { body }),
+
+  setDisputeStatus: (disputeId: number, status: "resolved" | "closed") =>
+    request<Dispute>(`/api/disputes/${disputeId}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    }),
 
   demoDrive: (orderId: number) =>
     post<{ lat: number; lng: number; remaining_km: number }>(
@@ -294,14 +485,78 @@ export const api = {
     post<Payment>("/api/payments/initiate", { order_id, method, payer_phone }),
 
   paymentStatus: (orderId: number) => request<Payment>(`/api/payments/${orderId}/status`),
+
+  // Staff app (provider execution). Staff tokens never reach the dashboard.
+  staffLogin: (phone_number: string, password: string) =>
+    post<StaffToken>("/api/staff/login", { phone_number, password }),
+
+  staffMe: () => request<Staff>("/api/staff/me"),
+
+  staffShift: (shift_state: string) =>
+    request<Staff>("/api/staff/me/shift", { method: "PATCH", body: JSON.stringify({ shift_state }) }),
+
+  staffJobs: () => request<Order[]>("/api/staff/jobs"),
+
+  staffOrder: (id: number) => request<Order>(`/api/staff/orders/${id}`),
+
+  staffSetOrderStatus: (id: number, status: OrderStatus, handoverCode?: string, sealId?: string) =>
+    request<Order>(`/api/staff/orders/${id}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        status,
+        handover_code: handoverCode ?? null,
+        seal_id: sealId ?? null,
+      }),
+    }),
+
+  supplierStaff: () => request<Staff[]>("/api/supplier/staff"),
+
+  supplierAddStaff: (body: Record<string, unknown>) => post<Staff>("/api/supplier/staff", body),
+
+  supplierSetStaffActive: (id: number, is_active: boolean) =>
+    request<Staff>(`/api/supplier/staff/${id}/active`, {
+      method: "PATCH",
+      body: JSON.stringify({ is_active }),
+    }),
+
+  supplierUpdateStaff: (id: number, body: Record<string, unknown>) =>
+    request<Staff>(`/api/supplier/staff/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+
+  supplierDeleteStaff: (id: number) =>
+    request<void>(`/api/supplier/staff/${id}`, { method: "DELETE" }),
+
+  // --- bids (inDrive-style negotiation) ---
+
+  listBids: (orderId: number) => request<Bid[]>(`/api/orders/${orderId}/bids`),
+
+  placeBid: (orderId: number, proposed_amount: number, note?: string) =>
+    request<Bid>(`/api/orders/${orderId}/bids`, {
+      method: "POST",
+      body: JSON.stringify({ proposed_amount, note: note || null }),
+    }),
+
+  acceptBid: (orderId: number, bidId: number) =>
+    request<Order>(`/api/orders/${orderId}/bids/${bidId}/accept`, {
+      method: "POST",
+    }),
+
+  pendingRequests: () => request<Order[]>("/api/supplier/pending-requests"),
 };
 
 export function trackOrder(orderId: number, onFrame: (frame: TrackingFrame) => void): () => void {
   const token = tokenStore.get() ?? "";
-  const scheme = window.location.protocol === "https:" ? "wss" : "ws";
-  const socket = new WebSocket(
-    `${scheme}://${window.location.host}/ws/orders/${orderId}?token=${token}`,
-  );
+  let base: string;
+  if (API_BASE) {
+    const url = new URL(API_BASE);
+    base = `${url.protocol === "https:" ? "wss" : "ws"}://${url.host}`;
+  } else {
+    const scheme = window.location.protocol === "https:" ? "wss" : "ws";
+    base = `${scheme}://${window.location.host}`;
+  }
+  const socket = new WebSocket(`${base}/ws/orders/${orderId}?token=${token}`);
   socket.onmessage = (event) => {
     try {
       onFrame(JSON.parse(event.data) as TrackingFrame);

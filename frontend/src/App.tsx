@@ -2,25 +2,22 @@ import { useEffect, useState } from "react";
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 
 import { Icon, type IconName } from "./components/brand";
-import { AuthScreen, FullPageLoader, Splash } from "./screens/auth";
-import { ActivityScreen, CustomerHome, PricesScreen } from "./screens/customer";
+import { AuthScreen, FullPageLoader, Splash, WelcomeScreen } from "./screens/auth";
+import { CustomerHome, OrdersScreen, PricesScreen, VehiclesScreen } from "./screens/customer";
 import { SettingsScreen } from "./screens/settings";
 import { SupplierHome, SupplierJobs } from "./screens/supplier";
 import { useSession } from "./state";
+import { MotoristAppScreen } from "./ui/screens/MotoristAppScreen";
+import { ProviderDashboardScreen } from "./ui/screens/ProviderDashboardScreen";
+import { GarageDashboardScreen } from "./ui/screens/GarageDashboardScreen";
+import { DriverAppScreen } from "./ui/screens/DriverAppScreen";
 
 type Tab = { to: string; label: string; icon: IconName };
 
 const CUSTOMER_TABS: Tab[] = [
   { to: "/", label: "Request", icon: "map" },
-  { to: "/prices", label: "Prices", icon: "nozzle" },
-  { to: "/activity", label: "Activity", icon: "clock" },
-  { to: "/settings", label: "Settings", icon: "gear" },
-];
-
-const SUPPLIER_TABS: Tab[] = [
-  { to: "/", label: "Dispatch", icon: "map" },
-  { to: "/earnings", label: "Earnings", icon: "wallet" },
-  { to: "/settings", label: "Settings", icon: "gear" },
+  { to: "/orders", label: "Orders", icon: "wallet" },
+  { to: "/settings", label: "Profile", icon: "gear" },
 ];
 
 function TabBar({ tabs }: { tabs: Tab[] }) {
@@ -41,6 +38,34 @@ function TabBar({ tabs }: { tabs: Tab[] }) {
   );
 }
 
+function AuthenticatedApp() {
+  const { user } = useSession();
+  const isSupplier = user?.role === "supplier";
+
+  return (
+    <div className={isSupplier ? "app app--dash" : "app"}>
+      <Routes>
+        {isSupplier ? (
+          <>
+            <Route path="/" element={<SupplierHome />} />
+            <Route path="/earnings" element={<SupplierJobs />} />
+          </>
+        ) : (
+          <>
+            <Route path="/" element={<CustomerHome />} />
+            <Route path="/prices" element={<PricesScreen />} />
+            <Route path="/orders" element={<OrdersScreen />} />
+            <Route path="/vehicles" element={<VehiclesScreen />} />
+          </>
+        )}
+        <Route path="/settings" element={<SettingsScreen />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+      {!isSupplier && <TabBar tabs={CUSTOMER_TABS} />}
+    </div>
+  );
+}
+
 export default function App() {
   const { user, ready } = useSession();
   const [booting, setBooting] = useState(true);
@@ -52,29 +77,16 @@ export default function App() {
 
   if (booting) return <Splash />;
   if (!ready) return <FullPageLoader label="Restoring your session" />;
-  if (!user) return <AuthScreen />;
-
-  const isSupplier = user.role === "supplier";
 
   return (
-    <div className="app">
-      <Routes>
-        {isSupplier ? (
-          <>
-            <Route path="/" element={<SupplierHome />} />
-            <Route path="/earnings" element={<SupplierJobs />} />
-          </>
-        ) : (
-          <>
-            <Route path="/" element={<CustomerHome />} />
-            <Route path="/prices" element={<PricesScreen />} />
-            <Route path="/activity" element={<ActivityScreen />} />
-          </>
-        )}
-        <Route path="/settings" element={<SettingsScreen />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-      <TabBar tabs={isSupplier ? SUPPLIER_TABS : CUSTOMER_TABS} />
-    </div>
+    <Routes>
+      {/* Design-library previews — reachable before login; a signed-in user is redirected into the app. */}
+      <Route path="/design" element={user ? <Navigate to="/" replace /> : <ProviderDashboardScreen />} />
+      <Route path="/motorist" element={user ? <Navigate to="/" replace /> : <MotoristAppScreen />} />
+      <Route path="/garage" element={user ? <Navigate to="/" replace /> : <GarageDashboardScreen />} />
+      <Route path="/driver" element={user ? <Navigate to="/" replace /> : <DriverAppScreen />} />
+      <Route path="/auth" element={user ? <Navigate to="/" replace /> : <AuthScreen />} />
+      <Route path="/*" element={user ? <AuthenticatedApp /> : <WelcomeScreen />} />
+    </Routes>
   );
 }

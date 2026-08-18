@@ -58,14 +58,6 @@ METHODS = [
         "prefixes": [],
         "note": "Opens the secure Paynow checkout page.",
     },
-    {
-        "id": "cash",
-        "name": "Cash on delivery",
-        "kind": "offline",
-        "requires_phone": False,
-        "prefixes": [],
-        "note": "Pay the supplier directly. Settled when they mark it received.",
-    },
 ]
 
 
@@ -100,14 +92,6 @@ def _decode(body: str) -> dict[str, str]:
 async def initiate(
     *, reference: str, amount: float, method: str, payer_phone: str | None, email: str
 ) -> PaymentResult:
-    if method == "cash":
-        return PaymentResult(
-            ok=True,
-            status="awaiting_confirmation",
-            reference=f"CASH-{secrets.token_hex(4).upper()}",
-            instructions="Have the exact amount ready. The supplier confirms on arrival.",
-        )
-
     if not settings.paynow_live:
         return PaymentResult(
             ok=True,

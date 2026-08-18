@@ -4,13 +4,27 @@ __pycache__/
 *.py[cod]
 .env
 *.db
+*.db-shm
+*.db-wal
 
 # Node
 node_modules/
 dist/
 *.local
+*.tsbuildinfo
+
+# Logs
+*.log
 
 # Editor / OS
 .vscode/
 .idea/
 .DS_Store
+Thumbs.db
+
+# Dev-only scripts
+backend/autostart.vbs
+backend/start_backend.bat
+backend/start_backend.ps1
+backend/stop_backend.bat
+backend/stop_backend.ps1

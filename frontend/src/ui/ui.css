@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .ui-map {
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .ui-map .leaflet-container {
+    background: var(--map-surface);
+    font: inherit;
+  }
+
+  .ui-map .leaflet-control-attribution {
+    background: var(--map-chip);
+    color: var(--map-ink);
+    font-size: 10px;
+  }
+
+  .ui-map .leaflet-control-attribution a {
+    color: var(--map-ink);
+  }
+
+  .ui-pin {
+    display: block;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid var(--map-pin-border);
+    box-shadow: 0 0 0 1px var(--map-ring);
+  }
+
+  .ui-pin--lime {
+    background: var(--accent-fill);
+  }
+  .ui-pin--success {
+    background: var(--success);
+  }
+  .ui-pin--blue {
+    background: var(--info);
+  }
+  .ui-pin--muted {
+    background: var(--muted);
+  }
+  .ui-pin--warn {
+    background: var(--warn);
+  }
+}

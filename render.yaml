@@ -1,0 +1,38 @@
+# Render Blueprint for the FuelLink backend (https://render.com).
+#
+# Render only hosts the API. Vercel hosts the React frontend (see
+# frontend/vercel.json) and talks to this service through VITE_API_URL.
+#
+# FREE-TIER CAVEAT: Render free web services run on an ephemeral filesystem.
+# The SQLite file (fuellink.db) is created fresh on every deploy/restart and
+# lost again afterwards. That is fine for a demo because the app re-seeds its
+# own data on boot (seed_if_empty), so the demo accounts, stations, stock and
+# job history reappear automatically. If you ever need durable data, switch
+# FUELLINK_DATABASE_URL to a managed Postgres (e.g. Neon) instead.
+
+services:
+  - type: web
+    name: fuellink-api
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: FUELLINK_SECRET_KEY
+        sync: false
+      - key: FUELLINK_DATABASE_URL
+        value: sqlite:///./fuellink.db
+      # Replace <your-app>.vercel.app with the deployed frontend URL. Vercel
+      # hostnames are HTTPS-only; add the exact origin, no trailing slash.
+      - key: FUELLINK_CORS_ORIGINS
+        value: https://<your-app>.vercel.app,http://localhost:5173,http://127.0.0.1:5173
+      - key: FUELLINK_DELIVERY_RATE_MULTIPLIER
+        value: "3.0"
+      - key: FUELLINK_SEARCH_RADIUS_KM
+        value: "20"
+      # Leave Paynow blank to keep the mock payment mode.
+      - key: PAYNOW_INTEGRATION_ID
+        sync: false
+      - key: PAYNOW_INTEGRATION_KEY
+        sync: false

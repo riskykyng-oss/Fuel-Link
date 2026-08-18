@@ -1,23 +1,46 @@
+import asyncio
+import contextlib
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
-from .database import Base, SessionLocal, engine
-from .routers import auth, orders, payments, services, stations, tracking
+from .database import Base, SessionLocal, engine, migrate
+from .routers import (
+    auth,
+    bids,
+    coverage,
+    disputes,
+    emergency,
+    orders,
+    payments,
+    services,
+    staff,
+    stations,
+    tracking,
+    vehicles,
+    verify,
+)
 from .seed import seed_if_empty
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     Base.metadata.create_all(bind=engine)
+    migrate()
     db = SessionLocal()
     try:
         seed_if_empty(db)
     finally:
         db.close()
+    # Background cascade: auto-declines expired offers and re-offers the next
+    # ranked provider (master spec §6). Killed on shutdown.
+    sweeper = asyncio.create_task(orders.offer_sweeper())
     yield
+    sweeper.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await sweeper
 
 
 app = FastAPI(
@@ -35,7 +58,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for module in (auth, stations, orders, payments, services, tracking):
+for module in (
+    auth,
+    verify,
+    stations,
+    coverage,
+    orders,
+    vehicles,
+    payments,
+    services,
+    tracking,
+    disputes,
+    emergency,
+    staff,
+    bids,
+):
     app.include_router(module.router)
 
 
@@ -44,6 +81,7 @@ def health() -> dict:
     return {
         "status": "ok",
         "payments_mode": "live" if settings.paynow_live else "mock",
+        "sms_mode": settings.fuellink_sms_mode,
         "delivery_rate_per_km": settings.fuellink_delivery_rate_multiplier,
         "search_radius_km": settings.fuellink_search_radius_km,
     }

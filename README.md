@@ -42,7 +42,9 @@ App on <http://localhost:5173>.
 | Role     | Phone        | Password      |
 |----------|--------------|---------------|
 | Motorist | `0771234567` | `password123` |
-| Supplier | `0782345678` | `password123` |
+| Supplier | `0712345678` | `password123` |
+| Garage   | `0786669991` | `password123` |
+| Courier  | `0774000001` | `password123` |
 
 Or register — the two sign-up forms collect different things. Motorists give a
 vehicle (make, model, plate, tank size); suppliers give a ZERA licence number,
@@ -54,7 +56,53 @@ vehicle registration, tanker capacity and the services they carry.
 cd backend && .venv/bin/python smoke_test.py
 ```
 
-Runs 40 checks across auth, pricing, dispatch, tracking, payment and ratings.
+Runs 186 checks across auth, pricing, dispatch, tracking, payment, the
+sealed-container handover and ratings.
+
+---
+
+## Deploy
+
+The frontend (React + Vite) runs on **Vercel**; the API (FastAPI + SQLite +
+WebSockets) needs a long-running server, so it lives on **Render**. Vercel
+cannot host the backend — it is static-only, and the API depends on a
+persistent process and WebSockets.
+
+### Backend on Render
+
+1. Push the repo to GitHub.
+2. Render → *New Web Service* → connect the repo → it will pick up
+   `render.yaml` (or create a blank Python service rooted at `backend/`).
+   * Blueprint build command: `pip install -r requirements.txt`
+   * Blueprint start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+   * Health check path: `/api/health`
+3. Set `FUELLINK_SECRET_KEY` in the Render dashboard (anything long/random).
+4. Note the service URL, e.g. `https://fuellink-api.onrender.com`.
+
+> **Free tier caveat:** Render free web services use an ephemeral filesystem,
+> so the SQLite database resets on every restart/deploy. That is fine for a
+> demo — `seed_if_empty` re-creates accounts, stations, stock and job history
+> on boot. For durable data, point `FUELLINK_DATABASE_URL` at a managed
+> Postgres instead.
+
+### Frontend on Vercel
+
+1. Vercel → *Add New Project* → connect the repo → root directory `frontend`.
+   `vercel.json` sets the build (`npm run build`), output (`dist`) and the SPA
+   rewrite so deep links like `/supplier` work.
+2. Add an environment variable to the Vercel project:
+
+   ```
+   VITE_API_URL=https://fuellink-api.onrender.com
+   ```
+
+   (Production only. Omit it in dev, where Vite proxies `/api` and `/ws` to
+   `localhost:8000`.)
+3. Back in Render, set `FUELLINK_CORS_ORIGINS` to your deployed Vercel origin,
+   e.g. `https://fuellink.vercel.app` (plus `http://localhost:5173` for local
+   testing).
+4. Redeploy both sides if either changes. The WebSocket live-tracking host is
+   derived from `VITE_API_URL` automatically.
 
 ---
 

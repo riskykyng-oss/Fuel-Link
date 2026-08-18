@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { NavLink } from "react-router-dom";
 
 import { Icon, Wordmark } from "../components/brand";
+import { PhotoPicker } from "../components/photo";
 import { Segmented, TopBar } from "../components/ui";
 import { api } from "../lib/api";
 import { useSession, useTheme, useToast } from "../state";
@@ -44,30 +46,7 @@ function Toggle({
         <strong style={{ fontSize: 14 }}>{label}</strong>
         {hint && <p className="small muted">{hint}</p>}
       </div>
-      <span
-        style={{
-          width: 44,
-          height: 26,
-          borderRadius: 999,
-          background: checked ? "var(--chartreuse)" : "var(--frost-strong)",
-          border: "1px solid var(--hairline)",
-          display: "flex",
-          alignItems: "center",
-          padding: 2,
-          justifyContent: checked ? "flex-end" : "flex-start",
-          flex: "none",
-          transition: "background 0.2s var(--ease)",
-        }}
-      >
-        <span
-          style={{
-            width: 20,
-            height: 20,
-            borderRadius: "50%",
-            background: checked ? "var(--gunmetal)" : "var(--muted)",
-          }}
-        />
-      </span>
+      <span className="switch" aria-hidden="true" />
     </button>
   );
 }
@@ -100,28 +79,37 @@ export function SettingsScreen() {
     localStorage.setItem(PREFS_KEY, JSON.stringify(next));
   }
 
+  const isSupplier = user?.role === "supplier";
   const profile = user?.supplier_profile;
   const vehicle = user?.vehicles?.[0];
 
   return (
-    <div className="screen">
-      <TopBar title="Settings" />
-      <div className="pad stack">
+    <div className={isSupplier ? "screen" : "screen"}>
+      {isSupplier && (
+        <div
+          className="dash__head"
+          style={{ maxWidth: 760, width: "100%", margin: "24px auto 0", padding: "0 20px" }}
+        >
+          <div>
+            <h1>Settings</h1>
+            <p className="muted">Your account, garage and app preferences.</p>
+          </div>
+          <NavLink to="/" className="btn btn--sm">
+            <Icon name="back" size={15} />
+            Dashboard
+          </NavLink>
+        </div>
+      )}
+      {!isSupplier && <TopBar title="Profile" />}
+
+      <div
+        className="pad stack"
+        style={isSupplier ? { maxWidth: 760, width: "100%", margin: "0 auto" } : undefined}
+      >
         <div className="tile row" style={{ gap: 14 }}>
           <span
-            className="row"
-            style={{
-              width: 52,
-              height: 52,
-              borderRadius: "50%",
-              background: "var(--chartreuse)",
-              color: "var(--gunmetal)",
-              justifyContent: "center",
-              fontFamily: "var(--display)",
-              fontWeight: 800,
-              fontSize: 21,
-              flex: "none",
-            }}
+            className={`avatar avatar--ring-green`}
+            style={{ width: 52, height: 52, fontSize: 21 }}
           >
             {user?.full_name?.charAt(0).toUpperCase() ?? "?"}
           </span>
@@ -129,23 +117,41 @@ export function SettingsScreen() {
             <strong>{user?.full_name}</strong>
             <p className="small muted data">{user?.phone_number}</p>
             <p className="eyebrow" style={{ marginTop: 3 }}>
-              {user?.role === "supplier" ? "Supplier account" : "Customer account"}
+              {isSupplier ? "Supplier account" : "Customer account"}
             </p>
           </div>
+          {profile?.is_verified && (
+            <span className="badge badge--ok">
+              <Icon name="check" size={11} />
+              Verified
+            </span>
+          )}
         </div>
 
-        {vehicle && (
-          <div className="tile">
-            <p className="eyebrow">Your vehicle</p>
-            <p style={{ marginTop: 4 }}>
-              {vehicle.make} {vehicle.model} ·{" "}
-              <span className="data">{vehicle.plate_number}</span>
-            </p>
-            <p className="small muted">
-              {vehicle.fuel_type} · {vehicle.tank_capacity_litres} L tank
-            </p>
+        <div className="tile">
+          <div className="between" style={{ marginBottom: 4 }}>
+            <p className="eyebrow">Vehicles</p>
+            <NavLink to="/vehicles" className="btn btn--sm">
+              <Icon name="gear" size={14} />
+              Manage
+            </NavLink>
           </div>
-        )}
+          {vehicle ? (
+            <>
+              <p style={{ marginTop: 4 }}>
+                {vehicle.make} {vehicle.model} ·{" "}
+                <span className="data">{vehicle.plate_number}</span>
+              </p>
+              <p className="small muted">
+                {vehicle.fuel_type} · {vehicle.tank_capacity_litres} L tank
+              </p>
+            </>
+          ) : (
+            <p className="small muted">
+              No vehicle yet. Add one so providers know what to look for at your pin.
+            </p>
+          )}
+        </div>
 
         {profile && (
           <div className="tile">
@@ -156,8 +162,44 @@ export function SettingsScreen() {
               {profile.tanker_capacity_litres} L
             </p>
             <p className="small" style={{ marginTop: 6 }}>
-              <span className={`dot ${profile.is_verified ? "dot--live" : "dot--warn"}`} />{" "}
-              {profile.is_verified ? "Licence verified" : "Licence under review"}
+              {profile.is_verified ? (
+                <span className="badge badge--ok">
+                  <Icon name="shield" size={11} />
+                  Licence verified
+                </span>
+              ) : (
+                <span className="badge badge--warn">Licence under review</span>
+              )}
+            </p>
+          </div>
+        )}
+
+        {profile && (
+          <div className="tile">
+            <p className="eyebrow">Garage logo</p>
+            <p className="small muted" style={{ marginBottom: 8 }}>
+              Shown to motorists when your garage is matched to a job.
+            </p>
+            <PhotoPicker
+              kind="garage"
+              onUploaded={(url) => notify(url ? "Garage logo saved." : "No logo uploaded.")}
+              label="Upload garage logo"
+            />
+          </div>
+        )}
+
+        {profile && (
+          <div className="tile">
+            <p className="eyebrow">Services offered</p>
+            <p style={{ marginTop: 4 }} className="small">
+              {(profile.services_offered ?? "fuel")
+                .split(",")
+                .map((s) => s.replace("_", " "))
+                .map((label) => (
+                  <span key={label} className="chip chip--static chip--ok" style={{ margin: "0 6px 6px 0" }}>
+                    {label}
+                  </span>
+                ))}
             </p>
           </div>
         )}

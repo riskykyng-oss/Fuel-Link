@@ -146,7 +146,30 @@ type IconName =
   | "back"
   | "target"
   | "phone"
-  | "check";
+  | "check"
+  | "grid"
+  | "share"
+  | "shield"
+  | "users"
+  | "truck"
+  | "box"
+  | "tag"
+  | "chart"
+  | "bell"
+  | "logout"
+  | "star"
+  | "help"
+  | "plus"
+  | "search"
+  | "dots"
+  | "id"
+  | "seal"
+  | "arrow"
+  | "siren"
+  | "route"
+  | "home"
+  | "info"
+  | "triangle";
 
 const PATHS: Record<IconName, string> = {
   nozzle: "M4 20h9V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1zM13 9h3a2 2 0 0 1 2 2v6a1.5 1.5 0 0 0 3 0V9l-2-3",
@@ -163,6 +186,29 @@ const PATHS: Record<IconName, string> = {
   target: "M12 3v3m0 12v3M3 12h3m12 0h3M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8",
   phone: "M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a1 1 0 0 1-1 1A16 16 0 0 1 4 5a1 1 0 0 1 1-1",
   check: "M4 12.5l5.5 5.5L20 7",
+  grid: "M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z",
+  share: "M12 3v13m0 0l-4-4m4 4l4-4M4 21h16",
+  shield: "M12 3l8 3v6c0 5-3.5 8.5-8 9-4.5-.5-8-4-8-9V6z",
+  users: "M16 19v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1m9-9a3 3 0 1 0 0-6 3 3 0 0 0 0 6m6 5a3 3 0 1 0-2-5.2",
+  truck: "M1 7h11v10H1zM12 10h5l4 3v4h-9zM6 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4m11 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4",
+  box: "M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7m-9 4v10",
+  tag: "M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9-9-9m4-4h.01",
+  chart: "M3 21h18M5 21V13m4 8V9m4 12V5m4 16v-9",
+  bell: "M12 3a6 6 0 0 0-6 6c0 6-2 8-2 8h16s-2-2-2-8a6 6 0 0 0-6-6m-2 16a2 2 0 0 0 4 0",
+  logout: "M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M9 8l-4 4 4 4m-4-4h11",
+  star: "M12 3l2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-3-5.4 3 1.1-6L3.2 9.4l6.1-.8z",
+  help: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18m0 14h.01M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1 1-1.1 1.8v.5",
+  plus: "M12 5v14M5 12h14",
+  search: "M21 21l-4.5-4.5M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0",
+  dots: "M5 12h.01M12 12h.01M19 12h.01",
+  id: "M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1m3 11h10m-9-6h4",
+  seal: "M12 2l2.6 1.9 3.2-.4 1 3.1 2.6 2-1 3.1 0 3.3-2.6 2-1 3.1-3.2-.4L12 22l-2.6-1.9-3.2.4-1-3.1-2.6-2 1-3.1 0-3.3 2.6-2 1-3.1 3.2.4zM12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8",
+  arrow: "M5 12h14m-6-6l6 6-6 6",
+  siren: "M7 18v-6a5 5 0 0 1 10 0v6M4 18h16M12 7V4M12 4h.01",
+  route: "M6 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4m12-12a2 2 0 1 0 0-4 2 2 0 0 0 0 4M6 18V8a4 4 0 0 1 4-4h4m0 0l-3 3m3-3l-3-3",
+  home: "M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z",
+  info: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18m0 8v6m0-10h.01",
+  triangle: "M12 4 20 19H4zM12 10v4m0 3h.01",
 };
 
 export function Icon({
@@ -176,6 +222,7 @@ export function Icon({
 }) {
   return (
     <svg
+      className="icon"
       width={size}
       height={size}
       viewBox="0 0 24 24"

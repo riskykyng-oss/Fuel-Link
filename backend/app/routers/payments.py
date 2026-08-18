@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..database import get_db
 from ..models import Order, Payment, PaymentStatus, Role, User
+from ..routers.orders import dispatch_pending_order
 from ..schemas import PaymentInit, PaymentMethodOut, PaymentOut
 from ..security import require_role
 from ..services import paynow
@@ -15,10 +16,8 @@ router = APIRouter(prefix="/api/payments", tags=["payments"])
 
 @router.get("/methods", response_model=list[PaymentMethodOut])
 def methods() -> list[PaymentMethodOut]:
-    return [
-        PaymentMethodOut(**m, live=settings.paynow_live or m["id"] == "cash")
-        for m in paynow.METHODS
-    ]
+    # Digital only (master spec §10): EcoCash via Paynow. Cash is not a method.
+    return [PaymentMethodOut(**m, live=settings.paynow_live) for m in paynow.METHODS]
 
 
 @router.post("/initiate", response_model=PaymentOut)
@@ -64,6 +63,12 @@ async def initiate(
     db.add(payment)
     db.commit()
     db.refresh(payment)
+
+    # Funds secured -> fire the first 60s dispatch offer if the order was
+    # still waiting in PENDING for payment.
+    db.refresh(order)
+    if result.ok and dispatch_pending_order(db, order):
+        db.commit()
 
     if not result.ok:
         raise HTTPException(status_code=502, detail=result.instructions)

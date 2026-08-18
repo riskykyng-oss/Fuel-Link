@@ -1,4 +1,5 @@
 import react from "@vitejs/plugin-react";
+import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vite";
 
 export default defineConfig({
@@ -8,6 +9,14 @@ export default defineConfig({
     proxy: {
       "/api": { target: "http://localhost:8000", changeOrigin: true },
       "/ws": { target: "ws://localhost:8000", ws: true },
+    },
+  },
+  build: {
+    rollupOptions: {
+      input: {
+        main: fileURLToPath(new URL("./index.html", import.meta.url)),
+        design: fileURLToPath(new URL("./design.html", import.meta.url)),
+      },
     },
   },
 });

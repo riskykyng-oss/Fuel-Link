@@ -119,7 +119,7 @@ export function MapView({
     line.current = null;
     if (!route) return;
     line.current = L.polyline(route, {
-      color: "#e0ff4f",
+      color: "var(--accent-text)",
       weight: 3,
       opacity: 0.85,
       dashArray: "1 9",

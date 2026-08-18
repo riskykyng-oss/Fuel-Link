@@ -1,0 +1,46 @@
+INFO:     Started server process [10656]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:57795 - "WebSocket /ws/orders/13?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwicm9sZSI6ImN1c3RvbWVyIiwiZXhwIjoxNzg3MzA4NDQxfQ.AI1h4xWRQKIyHiRsitGP8dDIG_4zFLILlD482IpzoUM" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:57810 - "WebSocket /ws/orders/13?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwicm9sZSI6ImN1c3RvbWVyIiwiZXhwIjoxNzg3MzA4NDQxfQ.AI1h4xWRQKIyHiRsitGP8dDIG_4zFLILlD482IpzoUM" [accepted]
+INFO:     connection open
+INFO:     Started server process [8232]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started server process [5624]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started server process [10496]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:62433 - "WebSocket /ws/orders/14?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwicm9sZSI6ImN1c3RvbWVyIiwiZXhwIjoxNzg3MzE0NjM0fQ.3DUB_8GgeFaJj4ei-_nxI5X-jRJBFgiA6HVr_yhwHo8" [accepted]
+INFO:     connection open
+INFO:     Started server process [9180]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started server process [2004]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started server process [14268]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:51623 - "WebSocket /ws/orders/15?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwicm9sZSI6ImN1c3RvbWVyIiwiZXhwIjoxNzg3MzE3NjI5fQ.458ANpkhH4gIDLeZU8G_JAJj6Tr1sxUemmLhk-YJkkI" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51626 - "WebSocket /ws/orders/15?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwicm9sZSI6ImN1c3RvbWVyIiwiZXhwIjoxNzg3MzE3NjI5fQ.458ANpkhH4gIDLeZU8G_JAJj6Tr1sxUemmLhk-YJkkI" [accepted]
+INFO:     connection open
+INFO:     Started server process [14580]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started server process [12256]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)

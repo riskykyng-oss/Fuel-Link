@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..database import SessionLocal, get_db
 from ..models import Order, OrderStatus, Role, User
-from ..security import ALGORITHM, require_role
+from ..security import ALGORITHM, mask_phone, require_role
 from ..services.geo import eta_minutes, road_distance_km
 
 router = APIRouter(tags=["tracking"])
@@ -16,15 +16,16 @@ router = APIRouter(tags=["tracking"])
 PUSH_INTERVAL_SECONDS = 3
 
 
-def _snapshot(db: Session, order_id: int) -> dict | None:
+def _snapshot(db: Session, order_id: int, viewer_id: int) -> dict | None:
     order = db.get(Order, order_id)
     if order is None:
         return None
 
     lat = lng = None
-    if order.supplier and order.supplier.supplier_profile:
-        lat = order.supplier.supplier_profile.current_lat
-        lng = order.supplier.supplier_profile.current_lng
+    profile = order.supplier.supplier_profile if order.supplier else None
+    if profile:
+        lat = profile.current_lat
+        lng = profile.current_lng
 
     remaining = order.distance_km
     if lat is not None and lng is not None:
@@ -42,7 +43,14 @@ def _snapshot(db: Session, order_id: int) -> dict | None:
         "remaining_km": round(remaining, 2),
         "eta_minutes": eta_minutes(remaining) if order.status != OrderStatus.DELIVERED else 0,
         "supplier_name": order.supplier.full_name if order.supplier else None,
-        "supplier_phone": order.supplier.phone_number if order.supplier else None,
+        # The courier's line is only ever shown MASKED — any call must route
+        # through the app relay, never the motorist's dialler directly.
+        "supplier_phone": mask_phone(order.supplier.phone_number) if order.supplier else None,
+        "provider_verified": bool(profile and profile.is_verified),
+        "provider_staff_id": order.staff.staff_id if order.staff else None,
+        # Handover reversal (master spec §3/§7): the motorist sees the
+        # read-only code and reads it out; the provider never receives it.
+        "handover_code": order.handover_code if viewer_id == order.customer_id else None,
     }
 
 
@@ -56,17 +64,23 @@ async def track_order(websocket: WebSocket, order_id: int, token: str = "") -> N
         await websocket.close(code=4401)
         return
 
-    db = SessionLocal()
+    last: dict | None = None
     try:
-        order = db.get(Order, order_id)
-        if order is None or user_id not in {order.customer_id, order.supplier_id}:
-            await websocket.close(code=4403)
-            return
-
-        last: dict | None = None
         while True:
-            db.expire_all()
-            current = _snapshot(db, order_id)
+            # Short-lived session per push: the pooled SQLite connection is
+            # returned between polls instead of being held for the life of the
+            # socket. Without this, a handful of open tracking tabs exhausts
+            # the connection pool and takes the whole API down.
+            db = SessionLocal()
+            try:
+                order = db.get(Order, order_id)
+                if order is None or user_id not in {order.customer_id, order.supplier_id}:
+                    await websocket.close(code=4403)
+                    return
+                current = _snapshot(db, order_id, viewer_id=user_id)
+            finally:
+                db.close()
+
             if current is None:
                 break
             if current != last:
@@ -78,7 +92,6 @@ async def track_order(websocket: WebSocket, order_id: int, token: str = "") -> N
     except WebSocketDisconnect:
         pass
     finally:
-        db.close()
         with contextlib.suppress(Exception):
             await websocket.close()
 

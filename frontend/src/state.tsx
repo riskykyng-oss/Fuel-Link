@@ -103,7 +103,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     document.documentElement.dataset.theme = resolved;
     document
       .querySelector('meta[name="theme-color"]')
-      ?.setAttribute("content", resolved === "light" ? "#f3f7f2" : "#00272b");
+      ?.setAttribute("content", resolved === "light" ? "#f2f5f2" : "#0b1416");
   }, [resolved]);
 
   const setChoice = useCallback((next: ThemeChoice) => {
