@@ -4,7 +4,6 @@ import { Icon } from "../../components/brand";
 import { api, ApiError, type Bid, type Order } from "../../lib/api";
 import { serviceName } from "../../lib/services";
 import { useToast } from "../../state";
-import { TrackProgress } from "./shared";
 import { PaymentScreen } from "./payment";
 import { DeliveredScreen } from "./delivered";
 
@@ -34,7 +33,6 @@ export function BiddingScreen({
   const [loading, setLoading] = useState(true);
   const [accepting, setAccepting] = useState<number | null>(null);
   const [current, setCurrent] = useState(order);
-  const [settled, setSettled] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const loadBids = useCallback(() => {
@@ -90,7 +88,7 @@ export function BiddingScreen({
       return (
         <PaymentScreen
           order={current}
-          onPaid={(o) => { setCurrent(o); setSettled(true); }}
+          onPaid={(o) => { setCurrent(o); }}
           onCancel={async () => {
             try { await api.setOrderStatus(current.id, "cancelled"); notify("Request cancelled."); onCleared(); }
             catch (e) { notify(e instanceof ApiError ? e.message : "Could not cancel.", "error"); }

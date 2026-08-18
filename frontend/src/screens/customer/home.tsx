@@ -272,8 +272,12 @@ export function CustomerHome() {
     if (placed) setActive(placed);
   }
   if (loading) return <Loader label="Finding nearby providers" />;
-  if (active)
+  if (active) {
+    if (active.status === "bidding") {
+      return <BiddingScreen order={active} onCleared={() => setActive(null)} onBack={() => setActive(null)} />;
+    }
     return <ActiveOrder order={active} onCleared={() => setActive(null)} onBack={() => setActive(null)} />;
+  }
   if (!user) return null;
   if (!user.phone_verified) {
     return (
