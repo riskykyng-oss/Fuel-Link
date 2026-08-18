@@ -20,13 +20,13 @@ services:
     healthCheckPath: /api/health
     envVars:
       - key: FUELLINK_SECRET_KEY
-        sync: false
+        value: 7b959856c0a97607d31552115ef8eae73d59013122bca5105d422e14575f58a1
       - key: FUELLINK_DATABASE_URL
         value: sqlite:///./fuellink.db
       # Replace <your-app>.vercel.app with the deployed frontend URL. Vercel
       # hostnames are HTTPS-only; add the exact origin, no trailing slash.
       - key: FUELLINK_CORS_ORIGINS
-        value: https://<your-app>.vercel.app,http://localhost:5173,http://127.0.0.1:5173
+        value: https://frontend-two-inky-95.vercel.app,http://localhost:5173,http://127.0.0.1:5173
       - key: FUELLINK_DELIVERY_RATE_MULTIPLIER
         value: "3.0"
       - key: FUELLINK_SEARCH_RADIUS_KM
