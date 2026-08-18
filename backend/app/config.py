@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     )
 
     fuellink_secret_key: str = "dev-only-insecure-key-change-in-production"
-    fuellink_database_url: str = "sqlite:///./fuellink.db"
+    fuellink_database_url: str = "postgresql://postgres:s6Wvxj8CLKvMWKZV@db.sxajkqpcabowhclxkrpk.supabase.co:6543/postgres"
     fuellink_cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     access_token_expire_minutes: int = 60 * 24 * 7

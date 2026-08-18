@@ -96,6 +96,22 @@ async def track_order(websocket: WebSocket, order_id: int, token: str = "") -> N
             await websocket.close()
 
 
+@router.get("/api/orders/{order_id}/poll")
+def poll_order(
+    order_id: int,
+    user: User = Depends(require_role(Role.CUSTOMER, Role.SUPPLIER)),
+    db: Session = Depends(get_db),
+) -> dict:
+    """HTTP polling fallback for tracking when WebSockets are unavailable (e.g. Vercel)."""
+    order = db.get(Order, order_id)
+    if order is None or user.id not in {order.customer_id, order.supplier_id}:
+        raise HTTPException(status_code=404, detail="Order not found.")
+    snap = _snapshot(db, order_id, viewer_id=user.id)
+    if snap is None:
+        raise HTTPException(status_code=404, detail="Order not found.")
+    return snap
+
+
 @router.post("/api/supplier/demo-drive/{order_id}")
 def demo_drive(
     order_id: int,

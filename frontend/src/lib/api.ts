@@ -548,21 +548,70 @@ export const api = {
 
 export function trackOrder(orderId: number, onFrame: (frame: TrackingFrame) => void): () => void {
   const token = tokenStore.get() ?? "";
-  let base: string;
-  if (API_BASE) {
-    const url = new URL(API_BASE);
-    base = `${url.protocol === "https:" ? "wss" : "ws"}://${url.host}`;
-  } else {
-    const scheme = window.location.protocol === "https:" ? "wss" : "ws";
-    base = `${scheme}://${window.location.host}`;
+
+  /* Try WebSocket first; fall back to HTTP polling if it fails. */
+  let pollTimer: ReturnType<typeof setInterval> | null = null;
+  let stopped = false;
+
+  function startPolling() {
+    const poll = async () => {
+      if (stopped) return;
+      try {
+        const res = await fetch(`${API_BASE}/api/orders/${orderId}/poll`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const frame = (await res.json()) as TrackingFrame;
+        onFrame(frame);
+        if (frame.status === "delivered" || frame.status === "cancelled") {
+          if (pollTimer) clearInterval(pollTimer);
+        }
+      } catch {
+        /* transient network error — keep polling */
+      }
+    };
+    void poll();
+    pollTimer = setInterval(poll, 3000);
   }
-  const socket = new WebSocket(`${base}/ws/orders/${orderId}?token=${token}`);
-  socket.onmessage = (event) => {
-    try {
-      onFrame(JSON.parse(event.data) as TrackingFrame);
-    } catch {
-      /* ignore malformed frames */
+
+  try {
+    let wsBase: string;
+    if (API_BASE) {
+      const url = new URL(API_BASE);
+      wsBase = `${url.protocol === "https:" ? "wss" : "ws"}://${url.host}`;
+    } else {
+      const scheme = window.location.protocol === "https:" ? "wss" : "ws";
+      wsBase = `${scheme}://${window.location.host}`;
     }
-  };
-  return () => socket.close();
+    const socket = new WebSocket(`${wsBase}/ws/orders/${orderId}?token=${token}`);
+    const failTimer = setTimeout(() => {
+      if (socket.readyState === WebSocket.CONNECTING) {
+        socket.close();
+        startPolling();
+      }
+    }, 3000);
+    socket.onopen = () => clearTimeout(failTimer);
+    socket.onerror = () => {
+      clearTimeout(failTimer);
+      if (!pollTimer) startPolling();
+    };
+    socket.onmessage = (event) => {
+      try {
+        onFrame(JSON.parse(event.data) as TrackingFrame);
+      } catch {
+        /* ignore malformed frames */
+      }
+    };
+    return () => {
+      stopped = true;
+      socket.close();
+      if (pollTimer) clearInterval(pollTimer);
+    };
+  } catch {
+    startPolling();
+    return () => {
+      stopped = true;
+      if (pollTimer) clearInterval(pollTimer);
+    };
+  }
 }
