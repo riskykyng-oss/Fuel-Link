@@ -27,15 +27,18 @@ from .seed import seed_if_empty
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    Base.metadata.create_all(bind=engine)
-    migrate()
-    db = SessionLocal()
+    import logging, traceback
+    _log = logging.getLogger("fuellink.lifespan")
     try:
-        seed_if_empty(db)
-    finally:
-        db.close()
-    # Background cascade: auto-declines expired offers and re-offers the next
-    # ranked provider (master spec §6). Killed on shutdown.
+        Base.metadata.create_all(bind=engine)
+        migrate()
+        db = SessionLocal()
+        try:
+            seed_if_empty(db)
+        finally:
+            db.close()
+    except Exception:
+        _log.warning("DB init failed — continuing without seed data:\n%s", traceback.format_exc())
     sweeper = asyncio.create_task(orders.offer_sweeper())
     yield
     sweeper.cancel()

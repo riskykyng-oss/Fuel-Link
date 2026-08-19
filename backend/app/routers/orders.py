@@ -391,6 +391,8 @@ async def offer_sweeper() -> None:
         db = SessionLocal()
         try:
             _expire_offers(db)
+        except Exception:
+            pass
         finally:
             db.close()
 

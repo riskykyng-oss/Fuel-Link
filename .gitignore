@@ -28,3 +28,5 @@ backend/start_backend.bat
 backend/start_backend.ps1
 backend/stop_backend.bat
 backend/stop_backend.ps1
+
+.vercel
