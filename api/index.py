@@ -1,11 +1,12 @@
 """Vercel serverless entry point for the FuelLink FastAPI backend."""
 
-import sys
 import os
+import sys
 
-# Add the backend directory to the Python path so imports work.
+# backend/ is one directory above api/
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 
+from mangum import Mangum  # noqa: E402
 from app.main import app  # noqa: E402
 
-# Vercel expects a variable named `app` at module level.
+handler = Mangum(app, lifespan="auto")
