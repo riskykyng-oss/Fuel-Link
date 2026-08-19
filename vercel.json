@@ -1,7 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/index" },
-    { "source": "/ws/(.*)", "destination": "/api/index" }
-  ]
+  "services": {
+    "fuellink-api": {
+      "root": "backend",
+      "entrypoint": "app.main:app",
+      "buildCommand": "pip install -r requirements.txt"
+    }
+  }
 }

@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     )
 
     fuellink_secret_key: str = "dev-only-insecure-key-change-in-production"
-    fuellink_database_url: str = "postgresql+psycopg://postgres:s6Wvxj8CLKvMWKZV@db.sxajkqpcabowhclxkrpk.supabase.co:5432/postgres?sslmode=require"
+    fuellink_database_url: str = "postgresql://postgres:s6Wvxj8CLKvMWKZV@db.sxajkqpcabowhclxkrpk.supabase.co:5432/postgres?sslmode=require"
     fuellink_cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,https://fuellink-green.vercel.app,https://frontend-two-inky-95.vercel.app"
 
     access_token_expire_minutes: int = 60 * 24 * 7
