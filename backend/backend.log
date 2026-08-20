@@ -1508,3 +1508,4 @@ INFO:     127.0.0.1:52152 - "GET /api/orders HTTP/1.1" 200 OK
 INFO:     127.0.0.1:52151 - "GET /api/supplier/summary HTTP/1.1" 200 OK
 INFO:     127.0.0.1:54016 - "GET /api/health HTTP/1.1" 200 OK
 INFO:     127.0.0.1:49159 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49817 - "GET /api/health HTTP/1.1" 200 OK

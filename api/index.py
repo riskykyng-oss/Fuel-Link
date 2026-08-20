@@ -3,8 +3,10 @@
 import os
 import sys
 
-# backend/ is one directory above api/
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
+# Add the backend directory to the Python path so imports work.
+_backend = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "backend")
+if _backend not in sys.path:
+    sys.path.insert(0, _backend)
 
 from mangum import Mangum  # noqa: E402
 from app.main import app  # noqa: E402
