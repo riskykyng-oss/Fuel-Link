@@ -1,6 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "cd frontend && npx vite build",
+  "framework": "vite",
+  "installCommand": "cd frontend && npm install",
+  "buildCommand": "cd frontend && npm run build",
   "outputDirectory": "frontend/dist",
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
@@ -14,5 +16,7 @@
         { "key": "Access-Control-Allow-Headers", "value": "Authorization,Content-Type" }
       ]
     }
+  ]
+}
   ]
 }
