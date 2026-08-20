@@ -1,3 +1,5 @@
+import { supabase } from "./supabase";
+
 export type Role = "customer" | "supplier";
 
 export type Vehicle = {
@@ -300,17 +302,26 @@ export type Staff = {
   created_at: string;
 };
 
-const TOKEN_KEY = "fuellink.token";
+export type AuthResponse = { access_token: string; refresh_token: string; expires_in: number; token_type: string; user: User };
 
-/** Optional absolute API origin for production (Vercel frontend -> hosted
- * backend). Empty in dev, where Vite proxies /api to localhost:8000. */
-const API_BASE: string = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
-
-export const tokenStore = {
-  get: () => localStorage.getItem(TOKEN_KEY),
-  set: (t: string) => localStorage.setItem(TOKEN_KEY, t),
-  clear: () => localStorage.removeItem(TOKEN_KEY),
+export type CodeRequestResponse = {
+  message: string;
+  lifetime_s: number;
+  resend_after_s: number;
+  dev_code: string | null;
 };
+
+export type CodeVerifyResponse = {
+  verified: boolean;
+  purpose: "signup" | "reset";
+  reset_token?: string;
+};
+
+export type PasswordResetResponse = { access_token: string; refresh_token: string; expires_in: number; token_type: string; user: User };
+
+export type StaffToken = { access_token: string; token_type: string; staff: Staff };
+
+const API_BASE: string = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
 
 export class ApiError extends Error {
   constructor(
@@ -322,8 +333,13 @@ export class ApiError extends Error {
   }
 }
 
+async function getToken(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token ?? null;
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = tokenStore.get();
+  const token = await getToken();
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
@@ -354,44 +370,25 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 const post = <T,>(path: string, body?: unknown) =>
   request<T>(path, { method: "POST", body: body ? JSON.stringify(body) : undefined });
 
-export type AuthResponse = { access_token: string; token_type: string; user: User };
-
-export type CodeRequestResponse = {
-  message: string;
-  lifetime_s: number;
-  resend_after_s: number;
-  dev_code: string | null;
-};
-
-export type CodeVerifyResponse = {
-  verified: boolean;
-  purpose: "signup" | "reset";
-  reset_token?: string;
-};
-
-export type PasswordResetResponse = { access_token: string; token_type: string; user: User };
-
-export type StaffToken = { access_token: string; token_type: string; staff: Staff };
-
 export const api = {
   health: () => request<{ status: string; payments_mode: string }>("/api/health"),
 
-  login: (phone_number: string, password: string, role: Role) =>
-    post<AuthResponse>("/api/auth/login", { phone_number, password, role }),
+  login: (phone_number: string, password: string, _role?: Role) =>
+    post<AuthResponse>("/api/auth/login", { phone_number, password }),
 
   registerCustomer: (body: Record<string, unknown>) =>
-    post<AuthResponse>("/api/auth/register/customer", body),
+    post<AuthResponse>("/api/auth/register", { ...body, role: "customer" }),
 
   registerSupplier: (body: Record<string, unknown>) =>
-    post<AuthResponse>("/api/auth/register/supplier", body),
+    post<AuthResponse>("/api/auth/register", { ...body, role: "supplier" }),
 
   me: () => request<User>("/api/auth/me"),
 
   setTheme: (theme: string) =>
-    request<User>("/api/auth/me/theme", { method: "PATCH", body: JSON.stringify({ theme }) }),
+    request<User>("/api/auth/theme", { method: "PATCH", body: JSON.stringify({ theme }) }),
 
   updateSupplierProfile: (body: Record<string, unknown>) =>
-    request<User>("/api/auth/me/supplier", { method: "PATCH", body: JSON.stringify(body) }),
+    request<User>("/api/auth/supplier", { method: "PATCH", body: JSON.stringify(body) }),
 
   requestCode: (phone_number: string, purpose: "signup" | "reset") =>
     post<CodeRequestResponse>("/api/auth/code/request", { phone_number, purpose }),
@@ -412,17 +409,17 @@ export const api = {
   updateVehicle: (id: number, body: Record<string, unknown>) =>
     request<Vehicle>(`/api/vehicles/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
 
-  deleteVehicle: (id: number) => request<void>(`/api/vehicles/${id}`, { method: "DELETE" }),
-
+  deleteVehicle: (id: number) =>
+    request<void>(`/api/vehicles/${id}`, { method: "DELETE" }),
 
   stationsNearby: (lat: number, lng: number, fuelType?: string) =>
     request<Station[]>(
       `/api/stations/nearby?lat=${lat}&lng=${lng}${fuelType ? `&fuel_type=${fuelType}` : ""}`,
     ),
 
-  fuelPrices: (refresh = false) => request<FuelPrices>(`/api/fuel-prices?refresh=${refresh}`),
+  fuelPrices: (refresh = false) => request<FuelPrices>(`/api/stations/fuel-prices?refresh=${refresh}`),
 
-  services: () => request<ServiceItem[]>("/api/services"),
+  services: () => request<ServiceItem[]>("/api/stations/services"),
 
   quote: (body: Record<string, unknown>) => post<Quote>("/api/quote", body),
 
@@ -454,7 +451,8 @@ export const api = {
 
   rateOrder: (id: number, rating: number) => post<Order>(`/api/orders/${id}/rate`, { rating }),
 
-  pushLocation: (lat: number, lng: number) => post<void>("/api/supplier/location", { lat, lng }),
+  pushLocation: (lat: number, lng: number) =>
+    post<void>("/api/supplier/location", { lat, lng }),
 
   setOnline: (is_online: boolean) => post<void>("/api/supplier/online", { is_online }),
 
@@ -463,7 +461,7 @@ export const api = {
   supplierContainers: () =>
     request<{ containers: SealedContainer[] }>("/api/supplier/containers"),
 
-  disputes: () => request<Dispute[]>("/api/disputes/mine"),
+  disputes: () => request<Dispute[]>("/api/disputes"),
 
   replyToDispute: (disputeId: number, body: string) =>
     post<Dispute>(`/api/disputes/${disputeId}/messages`, { body }),
@@ -486,21 +484,20 @@ export const api = {
 
   paymentStatus: (orderId: number) => request<Payment>(`/api/payments/${orderId}/status`),
 
-  // Staff app (provider execution). Staff tokens never reach the dashboard.
   staffLogin: (phone_number: string, password: string) =>
     post<StaffToken>("/api/staff/login", { phone_number, password }),
 
   staffMe: () => request<Staff>("/api/staff/me"),
 
   staffShift: (shift_state: string) =>
-    request<Staff>("/api/staff/me/shift", { method: "PATCH", body: JSON.stringify({ shift_state }) }),
+    request<Staff>("/api/staff/shift", { method: "PATCH", body: JSON.stringify({ shift_state }) }),
 
   staffJobs: () => request<Order[]>("/api/staff/jobs"),
 
-  staffOrder: (id: number) => request<Order>(`/api/staff/orders/${id}`),
+  staffOrder: (id: number) => request<Order>(`/api/staff/order/${id}`),
 
   staffSetOrderStatus: (id: number, status: OrderStatus, handoverCode?: string, sealId?: string) =>
-    request<Order>(`/api/staff/orders/${id}/status`, {
+    request<Order>(`/api/staff/orders/${id}`, {
       method: "PATCH",
       body: JSON.stringify({
         status,
@@ -528,8 +525,6 @@ export const api = {
   supplierDeleteStaff: (id: number) =>
     request<void>(`/api/supplier/staff/${id}`, { method: "DELETE" }),
 
-  // --- bids (inDrive-style negotiation) ---
-
   listBids: (orderId: number) => request<Bid[]>(`/api/orders/${orderId}/bids`),
 
   placeBid: (orderId: number, proposed_amount: number, note?: string) =>
@@ -547,71 +542,32 @@ export const api = {
 };
 
 export function trackOrder(orderId: number, onFrame: (frame: TrackingFrame) => void): () => void {
-  const token = tokenStore.get() ?? "";
-
-  /* Try WebSocket first; fall back to HTTP polling if it fails. */
   let pollTimer: ReturnType<typeof setInterval> | null = null;
   let stopped = false;
 
-  function startPolling() {
-    const poll = async () => {
-      if (stopped) return;
-      try {
-        const res = await fetch(`${API_BASE}/api/orders/${orderId}/poll`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) return;
-        const frame = (await res.json()) as TrackingFrame;
-        onFrame(frame);
-        if (frame.status === "delivered" || frame.status === "cancelled") {
-          if (pollTimer) clearInterval(pollTimer);
-        }
-      } catch {
-        /* transient network error — keep polling */
+  const poll = async () => {
+    if (stopped) return;
+    try {
+      const token = await getToken();
+      const res = await fetch(`${API_BASE}/api/orders/${orderId}/poll`, {
+        headers: { Authorization: `Bearer ${token ?? ""}` },
+      });
+      if (!res.ok) return;
+      const frame = (await res.json()) as TrackingFrame;
+      onFrame(frame);
+      if (frame.status === "delivered" || frame.status === "cancelled") {
+        if (pollTimer) clearInterval(pollTimer);
       }
-    };
-    void poll();
-    pollTimer = setInterval(poll, 3000);
-  }
-
-  try {
-    let wsBase: string;
-    if (API_BASE) {
-      const url = new URL(API_BASE);
-      wsBase = `${url.protocol === "https:" ? "wss" : "ws"}://${url.host}`;
-    } else {
-      const scheme = window.location.protocol === "https:" ? "wss" : "ws";
-      wsBase = `${scheme}://${window.location.host}`;
+    } catch {
+      /* transient network error */
     }
-    const socket = new WebSocket(`${wsBase}/ws/orders/${orderId}?token=${token}`);
-    const failTimer = setTimeout(() => {
-      if (socket.readyState === WebSocket.CONNECTING) {
-        socket.close();
-        startPolling();
-      }
-    }, 3000);
-    socket.onopen = () => clearTimeout(failTimer);
-    socket.onerror = () => {
-      clearTimeout(failTimer);
-      if (!pollTimer) startPolling();
-    };
-    socket.onmessage = (event) => {
-      try {
-        onFrame(JSON.parse(event.data) as TrackingFrame);
-      } catch {
-        /* ignore malformed frames */
-      }
-    };
-    return () => {
-      stopped = true;
-      socket.close();
-      if (pollTimer) clearInterval(pollTimer);
-    };
-  } catch {
-    startPolling();
-    return () => {
-      stopped = true;
-      if (pollTimer) clearInterval(pollTimer);
-    };
-  }
+  };
+
+  void poll();
+  pollTimer = setInterval(poll, 3000);
+
+  return () => {
+    stopped = true;
+    if (pollTimer) clearInterval(pollTimer);
+  };
 }

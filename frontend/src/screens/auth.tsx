@@ -6,6 +6,7 @@ import { Field, TopBar } from "../components/ui";
 import { AuthBackdrop } from "../components/backdrop";
 import { VerifyCodeCard } from "../components/verify";
 import { api, ApiError, type AuthResponse, type Coverage, type Role } from "../lib/api";
+import { supabase } from "../lib/supabase";
 import { useSession, useToast } from "../state";
 import { useMyLocation } from "./customer/shared";
 
@@ -315,6 +316,12 @@ export function AuthScreen() {
         setStage("verify");
         return;
       }
+      if (res.refresh_token) {
+        await supabase.auth.setSession({
+          access_token: res.access_token,
+          refresh_token: res.refresh_token,
+        });
+      }
       signIn(res);
     } catch (error) {
       notify(error instanceof ApiError ? error.message : "Network unreachable.", "error");
@@ -330,9 +337,13 @@ export function AuthScreen() {
         purpose="signup"
         title="Confirm it's you"
         onVerified={() => {
+          if (pending?.refresh_token) {
+            supabase.auth.setSession({
+              access_token: pending.access_token,
+              refresh_token: pending.refresh_token,
+            });
+          }
           signIn(pending);
-          // The register/login payload predates verification, so re-fetch the
-          // user to pick up phone_verified=true before entering the app.
           void refresh().catch(() => undefined);
         }}
         onCancel={() => setStage("credentials")}
@@ -342,7 +353,15 @@ export function AuthScreen() {
 
   if (stage === "reset") {
     return (
-      <ResetPasswordScreen onBack={() => setStage("credentials")} onDone={(res) => signIn(res)} />
+      <ResetPasswordScreen onBack={() => setStage("credentials")}       onDone={async (res) => {
+        if (res.refresh_token) {
+          await supabase.auth.setSession({
+            access_token: res.access_token,
+            refresh_token: res.refresh_token,
+          });
+        }
+        signIn(res);
+      }} />
     );
   }
 

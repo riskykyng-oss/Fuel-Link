@@ -8,14 +8,15 @@ import {
   type ReactNode,
 } from "react";
 
-import { api, tokenStore, type AuthResponse, type User } from "./lib/api";
+import { api, type User } from "./lib/api";
+import { supabase } from "./lib/supabase";
 
 /* ── Session ─────────────────────────────────────────────────────────── */
 
 type SessionValue = {
   user: User | null;
   ready: boolean;
-  signIn: (res: AuthResponse) => void;
+  signIn: (res: { access_token: string; user: User }) => void;
   signOut: () => void;
   refresh: () => Promise<void>;
 };
@@ -27,30 +28,45 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (!tokenStore.get()) {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async () => {
+      try {
+        const me = await api.me();
+        setUser(me);
+      } catch {
+        setUser(null);
+      }
       setReady(true);
-      return;
-    }
-    api
-      .me()
-      .then(setUser)
-      .catch(() => tokenStore.clear())
-      .finally(() => setReady(true));
+    });
+
+    supabase.auth.getSession().then(async () => {
+      try {
+        const me = await api.me();
+        setUser(me);
+      } catch {
+        setUser(null);
+      }
+      setReady(true);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const signIn = useCallback((res: AuthResponse) => {
-    tokenStore.set(res.access_token);
+  const signIn = useCallback(async (res: { access_token: string; user: User }) => {
     setUser(res.user);
   }, []);
 
-  const signOut = useCallback(() => {
-    tokenStore.clear();
+  const signOut = useCallback(async () => {
+    await supabase.auth.signOut();
     setUser(null);
   }, []);
 
   const refresh = useCallback(async () => {
-    if (!tokenStore.get()) return;
-    setUser(await api.me());
+    try {
+      const me = await api.me();
+      setUser(me);
+    } catch {
+      setUser(null);
+    }
   }, []);
 
   const value = useMemo(
@@ -109,7 +125,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const setChoice = useCallback((next: ThemeChoice) => {
     setChoiceState(next);
     localStorage.setItem(THEME_KEY, next);
-    if (tokenStore.get()) void api.setTheme(next).catch(() => undefined);
   }, []);
 
   const value = useMemo(() => ({ choice, resolved, setChoice }), [choice, resolved, setChoice]);

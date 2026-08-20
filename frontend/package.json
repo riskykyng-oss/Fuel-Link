@@ -4,13 +4,13 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "predev": "powershell -NoProfile -ExecutionPolicy Bypass -File ../backend/start_backend.ps1",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.112.3",
     "firebase": "^12.17.1",
     "leaflet": "^1.9.4",
     "react": "^19.1.1",
