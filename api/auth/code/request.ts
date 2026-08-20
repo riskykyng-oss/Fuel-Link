@@ -13,7 +13,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { phone_number } = req.body;
     if (!phone_number) return res.status(400).json({ detail: "phone_number required" });
 
-    const normalizedPhone = phone_number.replace(/^(?:\+?263|0)/, "0");
+    const normalizedPhone = phone_number.startsWith("+") ? phone_number : phone_number.replace(/^0/, "+263");
 
     const { error } = await supabaseAdmin.auth.signInWithOtp({ phone: normalizedPhone });
     if (error) return res.status(400).json({ detail: error.message });

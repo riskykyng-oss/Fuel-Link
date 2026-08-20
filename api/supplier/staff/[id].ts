@@ -29,7 +29,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (role_label !== undefined) updates.role_label = role_label;
       if (is_active !== undefined) updates.is_active = is_active;
       if (phone_number !== undefined) {
-        const normalizedPhone = phone_number.replace(/^(?:\+?263|0)/, "0");
+        const normalizedPhone = phone_number.startsWith("+") ? phone_number : phone_number.replace(/^0/, "+263");
         const { data: existing } = await supabaseAdmin
           .from("staff")
           .select("id")

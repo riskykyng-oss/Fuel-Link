@@ -25,7 +25,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .single();
     if (existing) throw new ApiError("Phone number already registered", 409);
 
-    const normalizedPhone = phone_number.replace(/^(?:\+?263|0)/, "0");
+    const normalizedPhone = phone_number.startsWith("+") ? phone_number : phone_number.replace(/^0/, "+263");
 
     const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
       phone: normalizedPhone,
