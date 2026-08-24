@@ -1,5 +1,33 @@
 import { supabase } from "./supabase";
 
+const SERVICES = [
+  { id: "fuel", name: "Fuel delivery", blurb: "Run out of fuel? We bring it to you.", icon: "nozzle", unit: "litre", callout_fee: 0 },
+  { id: "towing", name: "Towing", blurb: "Vehicle recovery and towing.", icon: "tow", unit: "trip", callout_fee: 25 },
+  { id: "jump_start", name: "Jump start", blurb: "Dead battery? We'll get you going.", icon: "battery", unit: "job", callout_fee: 8 },
+  { id: "tyre_change", name: "Tyre change", blurb: "Flat tyre replacement.", icon: "tyre", unit: "job", callout_fee: 10 },
+  { id: "lockout", name: "Lockout assistance", blurb: "Locked keys in the car?", icon: "key", unit: "job", callout_fee: 12 },
+  { id: "mechanic", name: "Roadside mechanic", blurb: "On-site mechanical diagnosis.", icon: "wrench", unit: "job", callout_fee: 15 },
+] as const;
+
+const PAYMENT_METHODS = [
+  { id: "ecocash", name: "EcoCash", kind: "mobile_money", requires_phone: true, prefixes: ["077", "078"], note: "You will get a PIN prompt on your handset.", live: false },
+  { id: "onemoney", name: "OneMoney", kind: "mobile_money", requires_phone: true, prefixes: ["071"], note: "You will get a PIN prompt on your handset.", live: false },
+  { id: "innbucks", name: "InnBucks", kind: "mobile_money", requires_phone: true, prefixes: ["078", "077", "071"], note: "Approve the collection in your InnBucks app.", live: false },
+  { id: "zipit", name: "Card / ZIPIT", kind: "redirect", requires_phone: false, prefixes: [], note: "Opens the secure Paynow checkout page.", live: false },
+];
+
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const r = 6371.0088;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return 2 * r * Math.asin(Math.sqrt(a));
+}
+
+function roadDistanceKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  return Math.round(haversineKm(lat1, lng1, lat2, lng2) * 1.35 * 100) / 100;
+}
+
 export type Role = "customer" | "supplier";
 
 export type Vehicle = {
@@ -321,8 +349,6 @@ export type PasswordResetResponse = { access_token: string; refresh_token: strin
 
 export type StaffToken = { access_token: string; token_type: string; staff: Staff };
 
-const API_BASE: string = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
-
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -343,43 +369,6 @@ function phoneToEmail(phone: string): string {
   const digits = normalizePhone(phone).replace(/\D/g, "");
   return `${digits}@fuellink.auth`;
 }
-
-async function getToken(): Promise<string | null> {
-  const { data } = await supabase.auth.getSession();
-  return data.session?.access_token ?? null;
-}
-
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = await getToken();
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...init.headers,
-    },
-  });
-
-  if (res.status === 204) return undefined as T;
-
-  const text = await res.text();
-  const body = text ? JSON.parse(text) : null;
-
-  if (!res.ok) {
-    const detail = body?.detail;
-    const message =
-      typeof detail === "string"
-        ? detail
-        : Array.isArray(detail)
-          ? detail.map((d: { msg: string }) => d.msg).join(", ")
-          : "Something went wrong. Try again.";
-    throw new ApiError(message, res.status);
-  }
-  return body as T;
-}
-
-const post = <T,>(path: string, body?: unknown) =>
-  request<T>(path, { method: "POST", body: body ? JSON.stringify(body) : undefined });
 
 async function fetchUserProfile(authUserId: string): Promise<User> {
   const { data: profile, error } = await supabase
@@ -412,7 +401,10 @@ async function fetchUserProfile(authUserId: string): Promise<User> {
 }
 
 export const api = {
-  health: () => request<{ status: string; payments_mode: string }>("/api/health").catch(() => ({ status: "ok", payments_mode: "mock" })),
+  health: async () => {
+    try { await supabase.from("stations").select("id").limit(1); return { status: "ok", payments_mode: "mock" as string }; }
+    catch { return { status: "error", payments_mode: "mock" as string }; }
+  },
 
   login: async (phone_number: string, password: string, role?: Role): Promise<AuthResponse> => {
     const email = phoneToEmail(phone_number);
@@ -565,11 +557,21 @@ export const api = {
     return fetchUserProfile(authUser.id);
   },
 
-  setTheme: (theme: string) =>
-    request<User>("/api/auth/theme", { method: "PATCH", body: JSON.stringify({ theme }) }),
+  setTheme: async (theme: string): Promise<User> => {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) throw new ApiError("Not authenticated", 401);
+    await supabase.from("users").update({ theme }).eq("auth_id", authUser.id);
+    return fetchUserProfile(authUser.id);
+  },
 
-  updateSupplierProfile: (body: Record<string, unknown>) =>
-    request<User>("/api/auth/supplier", { method: "PATCH", body: JSON.stringify(body) }),
+  updateSupplierProfile: async (body: Record<string, unknown>): Promise<User> => {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) throw new ApiError("Not authenticated", 401);
+    const { data: profile } = await supabase.from("users").select("id").eq("auth_id", authUser.id).single();
+    if (!profile) throw new ApiError("Profile not found", 404);
+    await supabase.from("supplier_profiles").update(body).eq("user_id", profile.id);
+    return fetchUserProfile(authUser.id);
+  },
 
   requestCode: async (phone_number: string, _purpose: "signup" | "reset"): Promise<CodeRequestResponse> => {
     const email = phoneToEmail(phone_number);
@@ -599,146 +601,425 @@ export const api = {
     };
   },
 
-  coverage: (lat: number, lng: number) => post<Coverage>("/api/coverage", { lat, lng }),
+  coverage: async (lat: number, lng: number): Promise<Coverage> => {
+    const { data: stations } = await supabase.from("stations").select("*");
+    const results = (stations || []).map((s) => ({
+      ...s,
+      distance_km: roadDistanceKm(lat, lng, s.lat, s.lng),
+    }));
+    results.sort((a, b) => a.distance_km - b.distance_km);
+    const covered = results.some((s) => s.distance_km <= 15);
+    const nearest = results[0];
+    return {
+      covered,
+      message: covered ? "FuelLink covers your area" : "You are outside our coverage zone",
+      est_response_min: nearest ? Math.round(nearest.distance_km / 32 * 60 + 6) : null,
+      stations: results.slice(0, 5),
+    };
+  },
 
-  vehicles: () => request<Vehicle[]>("/api/vehicles"),
+  vehicles: async (): Promise<Vehicle[]> => {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) return [];
+    const { data: profile } = await supabase.from("users").select("id").eq("auth_id", authUser.id).single();
+    if (!profile) return [];
+    const { data } = await supabase.from("vehicles").select("*").eq("owner_id", profile.id);
+    return data || [];
+  },
 
-  createVehicle: (body: Record<string, unknown>) =>
-    post<Vehicle>("/api/vehicles", body),
+  createVehicle: async (body: Record<string, unknown>): Promise<Vehicle> => {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) throw new ApiError("Not authenticated", 401);
+    const { data: profile } = await supabase.from("users").select("id").eq("auth_id", authUser.id).single();
+    if (!profile) throw new ApiError("Profile not found", 404);
+    if (body.is_default) {
+      await supabase.from("vehicles").update({ is_default: false }).eq("owner_id", profile.id);
+    }
+    const { data, error } = await supabase.from("vehicles").insert({
+      owner_id: profile.id,
+      make: body.make,
+      model: body.model,
+      plate_number: body.plate_number,
+      fuel_type: body.fuel_type || "petrol",
+      tank_capacity_litres: body.tank_capacity_litres || 50,
+      is_default: body.is_default ?? true,
+    }).select().single();
+    if (error) throw new ApiError(error.message, 400);
+    return data;
+  },
 
-  updateVehicle: (id: number, body: Record<string, unknown>) =>
-    request<Vehicle>(`/api/vehicles/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  updateVehicle: async (id: number, body: Record<string, unknown>): Promise<Vehicle> => {
+    const { data, error } = await supabase.from("vehicles").update(body).eq("id", id).select().single();
+    if (error) throw new ApiError(error.message, 400);
+    return data;
+  },
 
-  deleteVehicle: (id: number) =>
-    request<void>(`/api/vehicles/${id}`, { method: "DELETE" }),
+  deleteVehicle: async (id: number): Promise<void> => {
+    await supabase.from("vehicles").delete().eq("id", id);
+  },
 
-  stationsNearby: (lat: number, lng: number, fuelType?: string) =>
-    request<Station[]>(
-      `/api/stations/nearby?lat=${lat}&lng=${lng}${fuelType ? `&fuel_type=${fuelType}` : ""}`,
-    ),
+  stationsNearby: async (lat: number, lng: number, fuelType?: string): Promise<Station[]> => {
+    const { data: stations } = await supabase.from("stations").select("*");
+    let results = (stations || []).map((s) => ({
+      ...s,
+      distance_km: roadDistanceKm(lat, lng, s.lat, s.lng),
+    }));
+    if (fuelType === "petrol") results = results.filter((s) => s.has_petrol);
+    else if (fuelType === "diesel") results = results.filter((s) => s.has_diesel);
+    results.sort((a, b) => a.distance_km - b.distance_km);
+    return results.slice(0, 20);
+  },
 
-  fuelPrices: (refresh = false) => request<FuelPrices>(`/api/stations/fuel-prices?refresh=${refresh}`),
+  fuelPrices: async (_refresh = false): Promise<FuelPrices> => {
+    const { data: cached } = await supabase
+      .from("price_snapshots").select("*").order("fetched_at", { ascending: false }).limit(1).maybeSingle();
+    if (cached) return cached;
+    return { petrol_price: 1.57, diesel_price: 1.54, currency: "USD", source: "Fallback", source_url: null, is_live: false, effective_period: "", fetched_at: new Date().toISOString() };
+  },
 
-  services: () => request<ServiceItem[]>("/api/stations/services"),
+  services: (): Promise<ServiceItem[]> => Promise.resolve(SERVICES as unknown as ServiceItem[]),
 
-  quote: (body: Record<string, unknown>) => post<Quote>("/api/quote", body),
+  quote: async (body: Record<string, unknown>): Promise<Quote> => {
+    const lat = body.lat as number, lng = body.lng as number, serviceType = (body.service_type as string) || "fuel";
+    const { data: stations } = await supabase.from("stations").select("*");
+    let stationList = (stations || []).map((s) => ({ ...s, distance_km: roadDistanceKm(lat, lng, s.lat, s.lng) }));
+    stationList.sort((a, b) => a.distance_km - b.distance_km);
+    const station = stationList[0] || null;
+    const distance_km = station?.distance_km || 0;
+    const eta_minutes = Math.round(distance_km / 32 * 60 + 6);
+    const unit_price = serviceType === "fuel" ? (station?.petrol_price || 1.57) : 0;
+    const quantity = (body.quantity_litres as number) || 20;
+    const fuel_cost = serviceType === "fuel" ? unit_price * quantity : 0;
+    const delivery_fee = Math.round(distance_km * 2 * 100) / 100;
+    const service_fee = SERVICES.find((s) => s.id === serviceType)?.callout_fee || 0;
+    return {
+      distance_km, unit_price, fuel_cost, delivery_fee, service_fee,
+      total_amount: Math.round((fuel_cost + delivery_fee + service_fee) * 100) / 100,
+      eta_minutes, currency: "USD",
+      breakdown_note: serviceType === "fuel" ? `${quantity}L × $${unit_price}/L` : "",
+      station, coverage: distance_km <= 50,
+      providers: [], nearest_stations: stationList.slice(0, 5),
+    };
+  },
 
-  createOrder: (body: Record<string, unknown>) => post<Order>("/api/orders", body),
+  createOrder: async (body: Record<string, unknown>): Promise<Order> => {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) throw new ApiError("Not authenticated", 401);
+    const { data: profile } = await supabase.from("users").select("id").eq("auth_id", authUser.id).single();
+    if (!profile) throw new ApiError("Profile not found", 404);
+    const ref = "FL-" + Math.random().toString(36).slice(2, 8).toUpperCase();
+    const code = String(Math.floor(1000 + Math.random() * 9000));
+    const { data, error } = await supabase.from("orders").insert({
+      reference: ref,
+      customer_id: profile.id,
+      service_type: body.service_type || "fuel",
+      fuel_type: body.fuel_type || null,
+      quantity_litres: body.quantity_litres || 0,
+      pickup_lat: body.pickup_lat,
+      pickup_lng: body.pickup_lng,
+      pickup_address: body.pickup_address || "Dropped pin",
+      notes: body.notes || null,
+      distance_km: body.distance_km || 0,
+      fuel_cost: body.fuel_cost || 0,
+      delivery_fee: body.delivery_fee || 0,
+      service_fee: body.service_fee || 0,
+      total_amount: body.total_amount || 0,
+      vehicle_id: body.vehicle_id || null,
+      status: "pending",
+      handover_code: code,
+    }).select(`*, customer:users!orders_customer_id_fkey(id, full_name, phone_number), supplier:users!orders_supplier_id_fkey(id, full_name, phone_number), station:stations(*)`).single();
+    if (error) throw new ApiError(error.message, 400);
+    return data;
+  },
 
-  orders: () => request<Order[]>("/api/orders"),
+  orders: async (): Promise<Order[]> => {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) return [];
+    const { data: profile } = await supabase.from("users").select("id").eq("auth_id", authUser.id).single();
+    if (!profile) return [];
+    const { data } = await supabase.from("orders").select(`*, customer:users!orders_customer_id_fkey(id, full_name, phone_number), supplier:users!orders_supplier_id_fkey(id, full_name, phone_number), station:stations(*)`).eq("customer_id", profile.id).order("created_at", { ascending: false });
+    return data || [];
+  },
 
-  activeOrder: () => request<Order | null>("/api/orders/active"),
+  activeOrder: async (): Promise<Order | null> => {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) return null;
+    const { data: profile } = await supabase.from("users").select("id").eq("auth_id", authUser.id).single();
+    if (!profile) return null;
+    const ACTIVE = ["pending", "bidding", "offered", "accepted", "in_transit", "arrived"];
+    const { data } = await supabase.from("orders").select(`*, customer:users!orders_customer_id_fkey(id, full_name, phone_number), supplier:users!orders_supplier_id_fkey(id, full_name, phone_number), station:stations(*)`).eq("customer_id", profile.id).in("status", ACTIVE).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    return data || null;
+  },
 
-  availableJobs: () => request<Order[]>("/api/orders/available"),
+  availableJobs: async (): Promise<Order[]> => {
+    const { data } = await supabase.from("orders").select(`*, customer:users!orders_customer_id_fkey(id, full_name, phone_number), supplier:users!orders_supplier_id_fkey(id, full_name, phone_number), station:stations(*)`).eq("status", "pending").order("created_at", { ascending: false });
+    return data || [];
+  },
 
-  offers: () => request<Order[]>("/api/orders/offers"),
+  offers: async (): Promise<Order[]> => {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) return [];
+    const { data: profile } = await supabase.from("users").select("id").eq("auth_id", authUser.id).single();
+    if (!profile) return [];
+    const { data } = await supabase.from("orders").select(`*, customer:users!orders_customer_id_fkey(id, full_name, phone_number), supplier:users!orders_supplier_id_fkey(id, full_name, phone_number), station:stations(*)`).eq("offered_supplier_id", profile.id).in("status", ["offered", "pending"]).order("created_at", { ascending: false });
+    return data || [];
+  },
 
-  order: (id: number) => request<Order>(`/api/orders/${id}`),
+  order: async (id: number): Promise<Order> => {
+    const { data, error } = await supabase.from("orders").select(`*, customer:users!orders_customer_id_fkey(id, full_name, phone_number), supplier:users!orders_supplier_id_fkey(id, full_name, phone_number), station:stations(*)`).eq("id", id).single();
+    if (error || !data) throw new ApiError("Order not found", 404);
+    return data;
+  },
 
-  acceptOrder: (id: number) => post<Order>(`/api/orders/${id}/accept`),
+  acceptOrder: async (id: number): Promise<Order> => {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) throw new ApiError("Not authenticated", 401);
+    const { data: profile } = await supabase.from("users").select("id").eq("auth_id", authUser.id).single();
+    if (!profile) throw new ApiError("Profile not found", 404);
+    const { data, error } = await supabase.from("orders").update({ supplier_id: profile.id, status: "accepted", accepted_at: new Date().toISOString() }).eq("id", id).select(`*, customer:users!orders_customer_id_fkey(id, full_name, phone_number), supplier:users!orders_supplier_id_fkey(id, full_name, phone_number), station:stations(*)`).single();
+    if (error) throw new ApiError(error.message, 400);
+    return data;
+  },
 
-  rejectOrder: (id: number) => post<Order>(`/api/orders/${id}/reject`),
+  rejectOrder: async (id: number): Promise<Order> => {
+    const { data, error } = await supabase.from("orders").update({ status: "declined" }).eq("id", id).select(`*, customer:users!orders_customer_id_fkey(id, full_name, phone_number), supplier:users!orders_supplier_id_fkey(id, full_name, phone_number), station:stations(*)`).single();
+    if (error) throw new ApiError(error.message, 400);
+    return data;
+  },
 
-  setOrderStatus: (id: number, status: OrderStatus, handoverCode?: string, sealId?: string) =>
-    request<Order>(`/api/orders/${id}/status`, {
-      method: "PATCH",
-      body: JSON.stringify({
-        status,
-        handover_code: handoverCode ?? null,
-        seal_id: sealId ?? null,
-      }),
-    }),
+  setOrderStatus: async (id: number, status: OrderStatus, handoverCode?: string, sealId?: string): Promise<Order> => {
+    const update: Record<string, unknown> = { status };
+    if (handoverCode) update.handover_code = handoverCode;
+    if (sealId) update.seal_id = sealId;
+    if (status === "delivered") update.delivered_at = new Date().toISOString();
+    if (status === "in_transit") update.seal_dispatched_at = new Date().toISOString();
+    if (status === "arrived") update.seal_arrived_at = new Date().toISOString();
+    const { data, error } = await supabase.from("orders").update(update).eq("id", id).select(`*, customer:users!orders_customer_id_fkey(id, full_name, phone_number), supplier:users!orders_supplier_id_fkey(id, full_name, phone_number), station:stations(*)`).single();
+    if (error) throw new ApiError(error.message, 400);
+    return data;
+  },
 
-  rateOrder: (id: number, rating: number) => post<Order>(`/api/orders/${id}/rate`, { rating }),
+  rateOrder: async (id: number, rating: number): Promise<Order> => {
+    const { data, error } = await supabase.from("orders").update({ rating }).eq("id", id).select(`*, customer:users!orders_customer_id_fkey(id, full_name, phone_number), supplier:users!orders_supplier_id_fkey(id, full_name, phone_number), station:stations(*)`).single();
+    if (error) throw new ApiError(error.message, 400);
+    return data;
+  },
 
-  pushLocation: (lat: number, lng: number) =>
-    post<void>("/api/supplier/location", { lat, lng }),
+  pushLocation: async (lat: number, lng: number): Promise<void> => {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) return;
+    const { data: profile } = await supabase.from("users").select("id").eq("auth_id", authUser.id).single();
+    if (!profile) return;
+    await supabase.from("supplier_profiles").update({ current_lat: lat, current_lng: lng, location_updated_at: new Date().toISOString() }).eq("user_id", profile.id);
+  },
 
-  setOnline: (is_online: boolean) => post<void>("/api/supplier/online", { is_online }),
+  setOnline: async (is_online: boolean): Promise<void> => {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) return;
+    const { data: profile } = await supabase.from("users").select("id").eq("auth_id", authUser.id).single();
+    if (!profile) return;
+    await supabase.from("supplier_profiles").update({ is_online }).eq("user_id", profile.id);
+  },
 
-  supplierSummary: () => request<SupplierSummary>("/api/supplier/summary"),
+  supplierSummary: async (): Promise<SupplierSummary> => {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) throw new ApiError("Not authenticated", 401);
+    const { data: profile } = await supabase.from("users").select("id").eq("auth_id", authUser.id).single();
+    if (!profile) throw new ApiError("Profile not found", 404);
+    const { data: sp } = await supabase.from("supplier_profiles").select("*").eq("user_id", profile.id).single();
+    const { data: snapshot } = await supabase.from("price_snapshots").select("petrol_price, diesel_price, fetched_at, is_live").order("fetched_at", { ascending: false }).limit(1).maybeSingle();
+    const { data: todayOrders } = await supabase.from("orders").select("total_amount, quantity_litres").eq("supplier_id", profile.id).eq("status", "delivered").gte("delivered_at", new Date().toISOString().slice(0, 10));
+    const earningsToday = (todayOrders || []).reduce((s, o) => s + (o.total_amount || 0), 0);
+    const litresDelivered = (todayOrders || []).reduce((s, o) => s + (o.quantity_litres || 0), 0);
+    return {
+      is_online: sp?.is_online || false, is_verified: sp?.is_verified || false,
+      rating: sp?.rating || 5.0, completed_jobs: sp?.completed_jobs || 0,
+      total_earnings: sp?.total_earnings || 0, earnings_today: Math.round(earningsToday * 100) / 100,
+      litres_delivered: litresDelivered,
+      fuel_stock_petrol: sp?.fuel_stock_petrol || 0, fuel_stock_diesel: sp?.fuel_stock_diesel || 0,
+      tanker_capacity_litres: sp?.tanker_capacity_litres || 200, response_rate: 100,
+      open_requests: 0,
+      petrol_price: snapshot?.petrol_price || 1.57, diesel_price: snapshot?.diesel_price || 1.54,
+      cap_petrol: snapshot?.petrol_price || 1.57, cap_diesel: snapshot?.diesel_price || 1.54,
+      price_verified_at: snapshot?.fetched_at || null, price_is_live: snapshot?.is_live || false,
+      staff_on_shift: 0, staff_available: 0,
+      containers_ready: 0, containers_in_use: 0, containers_total: 0,
+      payout_held: 0, payout_released: 0, payout_disputed: 0, disputes_open: 0,
+    };
+  },
 
-  supplierContainers: () =>
-    request<{ containers: SealedContainer[] }>("/api/supplier/containers"),
+  supplierContainers: async (): Promise<{ containers: SealedContainer[] }> => {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) return { containers: [] };
+    const { data: profile } = await supabase.from("users").select("id").eq("auth_id", authUser.id).single();
+    if (!profile) return { containers: [] };
+    const { data } = await supabase.from("sealed_containers").select("serial, capacity_litres, status").eq("provider_id", profile.id);
+    return { containers: (data || []) as SealedContainer[] };
+  },
 
-  disputes: () => request<Dispute[]>("/api/disputes"),
+  disputes: async (): Promise<Dispute[]> => {
+    const { data } = await supabase.from("disputes").select("*, order:orders(reference)").order("created_at", { ascending: false });
+    return (data || []).map((d) => ({ ...d, reference: d.order?.reference || null, messages: [] }));
+  },
 
-  replyToDispute: (disputeId: number, body: string) =>
-    post<Dispute>(`/api/disputes/${disputeId}/messages`, { body }),
+  replyToDispute: async (disputeId: number, body: string): Promise<Dispute> => {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) throw new ApiError("Not authenticated", 401);
+    const { data: profile } = await supabase.from("users").select("id").eq("auth_id", authUser.id).single();
+    if (!profile) throw new ApiError("Profile not found", 404);
+    await supabase.from("dispute_messages").insert({ dispute_id: disputeId, sender_id: profile.id, body });
+    const { data } = await supabase.from("disputes").select("*").eq("id", disputeId).single();
+    return { ...data, messages: [] };
+  },
 
-  setDisputeStatus: (disputeId: number, status: "resolved" | "closed") =>
-    request<Dispute>(`/api/disputes/${disputeId}/status`, {
-      method: "PATCH",
-      body: JSON.stringify({ status }),
-    }),
+  setDisputeStatus: async (disputeId: number, status: "resolved" | "closed"): Promise<Dispute> => {
+    const { data, error } = await supabase.from("disputes").update({ status, resolved_at: status === "resolved" ? new Date().toISOString() : null }).eq("id", disputeId).select().single();
+    if (error) throw new ApiError(error.message, 400);
+    return { ...data, messages: [] };
+  },
 
-  demoDrive: (orderId: number) =>
-    post<{ lat: number; lng: number; remaining_km: number }>(
-      `/api/supplier/demo-drive/${orderId}`,
-    ),
+  demoDrive: async (orderId: number): Promise<{ lat: number; lng: number; remaining_km: number }> => {
+    const { data: order } = await supabase.from("orders").select("pickup_lat, pickup_lng").eq("id", orderId).single();
+    return { lat: order?.pickup_lat || -17.8, lng: order?.pickup_lng || 31.0, remaining_km: 5.0 };
+  },
 
-  paymentMethods: () => request<PaymentMethod[]>("/api/payments/methods"),
+  paymentMethods: (): Promise<PaymentMethod[]> => Promise.resolve(PAYMENT_METHODS as unknown as PaymentMethod[]),
 
-  initiatePayment: (order_id: number, method: string, payer_phone?: string) =>
-    post<Payment>("/api/payments/initiate", { order_id, method, payer_phone }),
+  initiatePayment: async (order_id: number, method: string, payer_phone?: string): Promise<Payment> => {
+    const { data, error } = await supabase.from("payments").insert({
+      order_id, method, amount: 0, status: "initiated",
+      instructions: `Pay via ${method}. Reference: FL-${order_id}`,
+      provider_reference: payer_phone || null,
+    }).select().single();
+    if (error) throw new ApiError(error.message, 400);
+    return data;
+  },
 
-  paymentStatus: (orderId: number) => request<Payment>(`/api/payments/${orderId}/status`),
+  paymentStatus: async (orderId: number): Promise<Payment> => {
+    const { data, error } = await supabase.from("payments").select("*").eq("order_id", orderId).single();
+    if (error || !data) throw new ApiError("Payment not found", 404);
+    return data;
+  },
 
-  staffLogin: (phone_number: string, password: string) =>
-    post<StaffToken>("/api/staff/login", { phone_number, password }),
+  staffLogin: async (phone_number: string, password: string): Promise<StaffToken> => {
+    const email = phoneToEmail(phone_number);
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw new ApiError("Invalid credentials", 401);
+    const { data: staff } = await supabase.from("staff").select("*").eq("auth_id", data.user.id).single();
+    if (!staff) throw new ApiError("Staff profile not found", 404);
+    return { access_token: data.session.access_token, token_type: "bearer", staff };
+  },
 
-  staffMe: () => request<Staff>("/api/staff/me"),
+  staffMe: async (): Promise<Staff> => {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) throw new ApiError("Not authenticated", 401);
+    const { data: staff } = await supabase.from("staff").select("*").eq("auth_id", authUser.id).single();
+    if (!staff) throw new ApiError("Staff not found", 404);
+    return staff;
+  },
 
-  staffShift: (shift_state: string) =>
-    request<Staff>("/api/staff/shift", { method: "PATCH", body: JSON.stringify({ shift_state }) }),
+  staffShift: async (shift_state: string): Promise<Staff> => {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) throw new ApiError("Not authenticated", 401);
+    const { data, error } = await supabase.from("staff").update({ shift_state }).eq("auth_id", authUser.id).select().single();
+    if (error) throw new ApiError(error.message, 400);
+    return data;
+  },
 
-  staffJobs: () => request<Order[]>("/api/staff/jobs"),
+  staffJobs: async (): Promise<Order[]> => {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) return [];
+    const { data: staff } = await supabase.from("staff").select("id").eq("auth_id", authUser.id).single();
+    if (!staff) return [];
+    const { data } = await supabase.from("orders").select(`*, customer:users!orders_customer_id_fkey(id, full_name, phone_number), supplier:users!orders_supplier_id_fkey(id, full_name, phone_number), station:stations(*)`).eq("staff_id", staff.id).in("status", ["accepted", "in_transit", "arrived"]).order("created_at", { ascending: false });
+    return data || [];
+  },
 
-  staffOrder: (id: number) => request<Order>(`/api/staff/order/${id}`),
+  staffOrder: async (id: number): Promise<Order> => {
+    const { data, error } = await supabase.from("orders").select(`*, customer:users!orders_customer_id_fkey(id, full_name, phone_number), supplier:users!orders_supplier_id_fkey(id, full_name, phone_number), station:stations(*)`).eq("id", id).single();
+    if (error || !data) throw new ApiError("Order not found", 404);
+    return data;
+  },
 
-  staffSetOrderStatus: (id: number, status: OrderStatus, handoverCode?: string, sealId?: string) =>
-    request<Order>(`/api/staff/orders/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify({
-        status,
-        handover_code: handoverCode ?? null,
-        seal_id: sealId ?? null,
-      }),
-    }),
+  staffSetOrderStatus: async (id: number, status: OrderStatus, handoverCode?: string, sealId?: string): Promise<Order> => {
+    return api.setOrderStatus(id, status, handoverCode, sealId);
+  },
 
-  supplierStaff: () => request<Staff[]>("/api/supplier/staff"),
+  supplierStaff: async (): Promise<Staff[]> => {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) return [];
+    const { data: profile } = await supabase.from("users").select("id").eq("auth_id", authUser.id).single();
+    if (!profile) return [];
+    const { data } = await supabase.from("staff").select("*").eq("provider_id", profile.id);
+    return data || [];
+  },
 
-  supplierAddStaff: (body: Record<string, unknown>) => post<Staff>("/api/supplier/staff", body),
+  supplierAddStaff: async (body: Record<string, unknown>): Promise<Staff> => {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) throw new ApiError("Not authenticated", 401);
+    const { data: profile } = await supabase.from("users").select("id").eq("auth_id", authUser.id).single();
+    if (!profile) throw new ApiError("Profile not found", 404);
+    const staffId = "STF" + String(Math.floor(Math.random() * 9999)).padStart(4, "0");
+    const { data, error } = await supabase.from("staff").insert({
+      provider_id: profile.id, full_name: body.full_name, phone_number: body.phone_number,
+      staff_id: staffId, hashed_password: "supabase-managed", role_label: body.role_label || "courier",
+      shift_state: "offline", is_active: true,
+    }).select().single();
+    if (error) throw new ApiError(error.message, 400);
+    return data;
+  },
 
-  supplierSetStaffActive: (id: number, is_active: boolean) =>
-    request<Staff>(`/api/supplier/staff/${id}/active`, {
-      method: "PATCH",
-      body: JSON.stringify({ is_active }),
-    }),
+  supplierSetStaffActive: async (id: number, is_active: boolean): Promise<Staff> => {
+    const { data, error } = await supabase.from("staff").update({ is_active }).eq("id", id).select().single();
+    if (error) throw new ApiError(error.message, 400);
+    return data;
+  },
 
-  supplierUpdateStaff: (id: number, body: Record<string, unknown>) =>
-    request<Staff>(`/api/supplier/staff/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify(body),
-    }),
+  supplierUpdateStaff: async (id: number, body: Record<string, unknown>): Promise<Staff> => {
+    const { data, error } = await supabase.from("staff").update(body).eq("id", id).select().single();
+    if (error) throw new ApiError(error.message, 400);
+    return data;
+  },
 
-  supplierDeleteStaff: (id: number) =>
-    request<void>(`/api/supplier/staff/${id}`, { method: "DELETE" }),
+  supplierDeleteStaff: async (id: number): Promise<void> => {
+    await supabase.from("staff").delete().eq("id", id);
+  },
 
-  listBids: (orderId: number) => request<Bid[]>(`/api/orders/${orderId}/bids`),
+  listBids: async (orderId: number): Promise<Bid[]> => {
+    const { data } = await supabase.from("bids").select("*, supplier:users!bids_supplier_id_fkey(full_name, supplier_profiles(company_name, is_verified, rating))").eq("order_id", orderId).order("created_at", { ascending: false });
+    return (data || []).map((b) => ({
+      ...b,
+      supplier_name: b.supplier?.full_name || null,
+      supplier_company: b.supplier?.supplier_profiles?.company_name || null,
+      supplier_verified: b.supplier?.supplier_profiles?.is_verified || false,
+      supplier_rating: b.supplier?.supplier_profiles?.rating || null,
+    }));
+  },
 
-  placeBid: (orderId: number, proposed_amount: number, note?: string) =>
-    request<Bid>(`/api/orders/${orderId}/bids`, {
-      method: "POST",
-      body: JSON.stringify({ proposed_amount, note: note || null }),
-    }),
+  placeBid: async (orderId: number, proposed_amount: number, note?: string): Promise<Bid> => {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) throw new ApiError("Not authenticated", 401);
+    const { data: profile } = await supabase.from("users").select("id").eq("auth_id", authUser.id).single();
+    if (!profile) throw new ApiError("Profile not found", 404);
+    const { data, error } = await supabase.from("bids").insert({
+      order_id: orderId, supplier_id: profile.id, proposed_amount, note: note || null,
+    }).select().single();
+    if (error) throw new ApiError(error.message, 400);
+    return { ...data, supplier_name: null, supplier_company: null, supplier_verified: false, supplier_rating: null };
+  },
 
-  acceptBid: (orderId: number, bidId: number) =>
-    request<Order>(`/api/orders/${orderId}/bids/${bidId}/accept`, {
-      method: "POST",
-    }),
+  acceptBid: async (orderId: number, bidId: number): Promise<Order> => {
+    const { data: bid } = await supabase.from("bids").select("*").eq("id", bidId).single();
+    if (!bid) throw new ApiError("Bid not found", 404);
+    const { data, error } = await supabase.from("orders").update({ supplier_id: bid.supplier_id, total_amount: bid.proposed_amount, status: "accepted", accepted_at: new Date().toISOString() }).eq("id", orderId).select(`*, customer:users!orders_customer_id_fkey(id, full_name, phone_number), supplier:users!orders_supplier_id_fkey(id, full_name, phone_number), station:stations(*)`).single();
+    if (error) throw new ApiError(error.message, 400);
+    return data;
+  },
 
-  pendingRequests: () => request<Order[]>("/api/supplier/pending-requests"),
+  pendingRequests: async (): Promise<Order[]> => {
+    const { data } = await supabase.from("orders").select(`*, customer:users!orders_customer_id_fkey(id, full_name, phone_number), supplier:users!orders_supplier_id_fkey(id, full_name, phone_number), station:stations(*)`).in("status", ["pending", "offered"]).order("created_at", { ascending: false });
+    return data || [];
+  },
 };
 
 export function trackOrder(orderId: number, onFrame: (frame: TrackingFrame) => void): () => void {
@@ -748,14 +1029,26 @@ export function trackOrder(orderId: number, onFrame: (frame: TrackingFrame) => v
   const poll = async () => {
     if (stopped) return;
     try {
-      const token = await getToken();
-      const res = await fetch(`${API_BASE}/api/orders/${orderId}/poll`, {
-        headers: { Authorization: `Bearer ${token ?? ""}` },
+      const { data } = await supabase
+        .from("orders")
+        .select("id, reference, status, supplier_id, pickup_lat, pickup_lng, eta_minutes, handover_code, provider_staff_id")
+        .eq("id", orderId)
+        .single();
+      if (!data) return;
+      const { data: supplier } = await supabase
+        .from("supplier_profiles").select("current_lat, current_lng").eq("user_id", data.supplier_id || 0).maybeSingle();
+      const remaining_km = supplier?.current_lat && data.pickup_lat
+        ? roadDistanceKm(supplier.current_lat, supplier.current_lng, data.pickup_lat, data.pickup_lng) : 0;
+      onFrame({
+        order_id: data.id, reference: data.reference, status: data.status as OrderStatus,
+        payment_status: null,
+        supplier_lat: supplier?.current_lat || null, supplier_lng: supplier?.current_lng || null,
+        pickup_lat: data.pickup_lat || 0, pickup_lng: data.pickup_lng || 0,
+        remaining_km, eta_minutes: data.eta_minutes || 0,
+        supplier_name: null, supplier_phone: null, provider_verified: false,
+        provider_staff_id: data.provider_staff_id, handover_code: data.handover_code,
       });
-      if (!res.ok) return;
-      const frame = (await res.json()) as TrackingFrame;
-      onFrame(frame);
-      if (frame.status === "delivered" || frame.status === "cancelled") {
+      if (data.status === "delivered" || data.status === "cancelled") {
         if (pollTimer) clearInterval(pollTimer);
       }
     } catch {
