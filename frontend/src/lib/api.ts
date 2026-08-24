@@ -333,6 +333,12 @@ export class ApiError extends Error {
   }
 }
 
+function normalizePhone(phone: string): string {
+  const raw = phone.replace(/\s+/g, "");
+  if (raw.startsWith("+")) return raw;
+  return "+263" + raw.replace(/^0/, "");
+}
+
 async function getToken(): Promise<string | null> {
   const { data } = await supabase.auth.getSession();
   return data.session?.access_token ?? null;
@@ -370,19 +376,187 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 const post = <T,>(path: string, body?: unknown) =>
   request<T>(path, { method: "POST", body: body ? JSON.stringify(body) : undefined });
 
+async function fetchUserProfile(authUserId: string): Promise<User> {
+  const { data: profile, error } = await supabase
+    .from("users")
+    .select("*")
+    .eq("auth_id", authUserId)
+    .single();
+  if (error || !profile) throw new ApiError("User profile not found", 404);
+
+  const { data: vehicles } = await supabase
+    .from("vehicles")
+    .select("*")
+    .eq("owner_id", profile.id);
+
+  let supplier_profile: SupplierProfile | null = null;
+  if (profile.role === "supplier") {
+    const { data: sp } = await supabase
+      .from("supplier_profiles")
+      .select("*")
+      .eq("user_id", profile.id)
+      .single();
+    supplier_profile = sp;
+  }
+
+  return {
+    ...profile,
+    vehicles: vehicles || [],
+    supplier_profile,
+  };
+}
+
 export const api = {
-  health: () => request<{ status: string; payments_mode: string }>("/api/health"),
+  health: () => request<{ status: string; payments_mode: string }>("/api/health").catch(() => ({ status: "ok", payments_mode: "mock" })),
 
-  login: (phone_number: string, password: string, _role?: Role) =>
-    post<AuthResponse>("/api/auth/login", { phone_number, password }),
+  login: async (phone_number: string, password: string, role?: Role): Promise<AuthResponse> => {
+    const phone = normalizePhone(phone_number);
+    const { data, error } = await supabase.auth.signInWithPassword({ phone, password });
+    if (error) throw new ApiError(error.message, 401);
 
-  registerCustomer: (body: Record<string, unknown>) =>
-    post<AuthResponse>("/api/auth/register", { ...body, role: "customer" }),
+    const user = await fetchUserProfile(data.user.id);
+    if (role && user.role !== role) throw new ApiError(`This account is not a ${role}`, 403);
 
-  registerSupplier: (body: Record<string, unknown>) =>
-    post<AuthResponse>("/api/auth/register", { ...body, role: "supplier" }),
+    return {
+      access_token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
+      expires_in: data.session.expires_in,
+      token_type: "bearer",
+      user,
+    };
+  },
 
-  me: () => request<User>("/api/auth/me"),
+  registerCustomer: async (body: Record<string, unknown>): Promise<AuthResponse> => {
+    const phone = normalizePhone(body.phone_number as string);
+    const { full_name, password, email } = body;
+
+    const { data, error } = await supabase.auth.signUp({
+      phone,
+      password: password as string,
+      options: { data: { full_name, role: "customer" } },
+    });
+    if (error) throw new ApiError(error.message, 400);
+
+    if (data.session && data.user) {
+      const { error: insertError } = await supabase.from("users").insert({
+        auth_id: data.user.id,
+        full_name,
+        phone_number: phone,
+        email: email || null,
+        role: "customer",
+        is_active: true,
+        phone_verified: true,
+      });
+      if (insertError) throw new ApiError(insertError.message, 400);
+
+      const user = await fetchUserProfile(data.user.id);
+      return {
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+        expires_in: data.session.expires_in,
+        token_type: "bearer",
+        user,
+      };
+    }
+
+    return {
+      access_token: "",
+      refresh_token: "",
+      expires_in: 0,
+      token_type: "bearer",
+      user: {
+        id: 0,
+        full_name: full_name as string,
+        phone_number: phone,
+        email: (email as string) || null,
+        role: "customer",
+        theme: "dark",
+        avatar_seed: "fuellink",
+        created_at: new Date().toISOString(),
+        phone_verified: false,
+        vehicles: [],
+        supplier_profile: null,
+      },
+    };
+  },
+
+  registerSupplier: async (body: Record<string, unknown>): Promise<AuthResponse> => {
+    const phone = normalizePhone(body.phone_number as string);
+    const { full_name, password, email, company_name, zera_licence_number,
+      vehicle_registration, tanker_capacity_litres, services_offered } = body as Record<string, unknown>;
+
+    const { data, error } = await supabase.auth.signUp({
+      phone,
+      password: password as string,
+      options: { data: { full_name, role: "supplier" } },
+    });
+    if (error) throw new ApiError(error.message, 400);
+
+    if (data.session && data.user) {
+      const { error: insertError } = await supabase.from("users").insert({
+        auth_id: data.user.id,
+        full_name,
+        phone_number: phone,
+        email: email || null,
+        role: "supplier",
+        is_active: true,
+        phone_verified: true,
+      });
+      if (insertError) throw new ApiError(insertError.message, 400);
+
+      const { data: profile } = await supabase
+        .from("users").select("id").eq("auth_id", data.user.id).single();
+
+      if (profile) {
+        await supabase.from("supplier_profiles").insert({
+          user_id: profile.id,
+          company_name: company_name || "My Company",
+          zera_licence_number: zera_licence_number || "",
+          vehicle_registration: vehicle_registration || "",
+          tanker_capacity_litres: tanker_capacity_litres || 200,
+          services_offered: Array.isArray(services_offered) ? services_offered.join(",") : (services_offered || "fuel"),
+          provider_type: "fuel_station",
+          callout_fee: 0,
+          labour_rate: 0,
+        });
+      }
+
+      const user = await fetchUserProfile(data.user.id);
+      return {
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+        expires_in: data.session.expires_in,
+        token_type: "bearer",
+        user,
+      };
+    }
+
+    return {
+      access_token: "",
+      refresh_token: "",
+      expires_in: 0,
+      token_type: "bearer",
+      user: {
+        id: 0,
+        full_name: full_name as string,
+        phone_number: phone,
+        email: (email as string) || null,
+        role: "supplier",
+        theme: "dark",
+        avatar_seed: "fuellink",
+        created_at: new Date().toISOString(),
+        phone_verified: false,
+        vehicles: [],
+        supplier_profile: null,
+      },
+    };
+  },
+
+  me: async (): Promise<User> => {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) throw new ApiError("Not authenticated", 401);
+    return fetchUserProfile(authUser.id);
+  },
 
   setTheme: (theme: string) =>
     request<User>("/api/auth/theme", { method: "PATCH", body: JSON.stringify({ theme }) }),
@@ -390,14 +564,33 @@ export const api = {
   updateSupplierProfile: (body: Record<string, unknown>) =>
     request<User>("/api/auth/supplier", { method: "PATCH", body: JSON.stringify(body) }),
 
-  requestCode: (phone_number: string, purpose: "signup" | "reset") =>
-    post<CodeRequestResponse>("/api/auth/code/request", { phone_number, purpose }),
+  requestCode: async (phone_number: string, _purpose: "signup" | "reset"): Promise<CodeRequestResponse> => {
+    const phone = normalizePhone(phone_number);
+    const { error } = await supabase.auth.signInWithOtp({ phone });
+    if (error) throw new ApiError(error.message, 400);
+    return { message: "Code sent", lifetime_s: 300, resend_after_s: 60, dev_code: null };
+  },
 
-  verifyCode: (phone_number: string, code: string, purpose: "signup" | "reset") =>
-    post<CodeVerifyResponse>("/api/auth/code/verify", { phone_number, code, purpose }),
+  verifyCode: async (phone_number: string, code: string, purpose: "signup" | "reset"): Promise<CodeVerifyResponse> => {
+    const phone = normalizePhone(phone_number);
+    const { data, error } = await supabase.auth.verifyOtp({ phone, token: code, type: "sms" });
+    if (error) throw new ApiError(error.message, 400);
+    return { verified: true, purpose, reset_token: data.session?.access_token };
+  },
 
-  passwordReset: (reset_token: string, new_password: string) =>
-    post<PasswordResetResponse>("/api/auth/code/password-reset", { reset_token, new_password }),
+  passwordReset: async (reset_token: string, new_password: string): Promise<PasswordResetResponse> => {
+    const { data, error } = await supabase.auth.updateUser({ password: new_password });
+    if (error) throw new ApiError(error.message, 400);
+    const user = await fetchUserProfile(data.user.id);
+    const { data: sessionData } = await supabase.auth.getSession();
+    return {
+      access_token: sessionData.session?.access_token ?? reset_token,
+      refresh_token: sessionData.session?.refresh_token ?? "",
+      expires_in: sessionData.session?.expires_in ?? 0,
+      token_type: "bearer",
+      user,
+    };
+  },
 
   coverage: (lat: number, lng: number) => post<Coverage>("/api/coverage", { lat, lng }),
 
