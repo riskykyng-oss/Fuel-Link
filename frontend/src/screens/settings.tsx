@@ -52,7 +52,7 @@ function Toggle({
 }
 
 export function SettingsScreen() {
-  const { user, signOut } = useSession();
+  const { user, refresh, signOut } = useSession();
   const { choice, setChoice } = useTheme();
   const { notify } = useToast();
   const [prefs, setPrefs] = useState<Prefs>(DEFAULTS);
@@ -171,6 +171,20 @@ export function SettingsScreen() {
                 <span className="badge badge--warn">Licence under review</span>
               )}
             </p>
+            {!profile.is_verified && (
+              <button
+                type="button"
+                className="btn btn--sm btn--primary"
+                style={{ marginTop: 8 }}
+                onClick={() => {
+                  api.requestVerification()
+                    .then(() => { refresh(); notify("Verification request submitted. We'll review your ZERA licence shortly."); })
+                    .catch(() => notify("Could not submit verification request.", "error"));
+                }}
+              >
+                <Icon name="shield" size={13} /> Request verification
+              </button>
+            )}
           </div>
         )}
 

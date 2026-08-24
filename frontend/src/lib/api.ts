@@ -517,6 +517,8 @@ export const api = {
           provider_type: "fuel_station",
           callout_fee: 0,
           labour_rate: 0,
+          is_verified: true,
+          verification_status: "verified",
         });
       }
 
@@ -570,6 +572,17 @@ export const api = {
     const { data: profile } = await supabase.from("users").select("id").eq("auth_id", authUser.id).single();
     if (!profile) throw new ApiError("Profile not found", 404);
     await supabase.from("supplier_profiles").update(body).eq("user_id", profile.id);
+    return fetchUserProfile(authUser.id);
+  },
+
+  requestVerification: async (): Promise<User> => {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) throw new ApiError("Not authenticated", 401);
+    const { data: profile } = await supabase.from("users").select("id").eq("auth_id", authUser.id).single();
+    if (!profile) throw new ApiError("Profile not found", 404);
+    await supabase.from("supplier_profiles").update({
+      verification_status: "pending",
+    }).eq("user_id", profile.id);
     return fetchUserProfile(authUser.id);
   },
 

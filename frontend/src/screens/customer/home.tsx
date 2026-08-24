@@ -246,7 +246,7 @@ export function CustomerHome() {
   if (loading) return <Loader label="Finding nearby providers" />;
   if (active) {
     if (active.status === "bidding") {
-      return <BiddingScreen order={active} onCleared={() => setActive(null)} onBack={() => setActive(null)} />;
+      return <BiddingScreen order={active} onCleared={() => setActive(null)} onBack={() => setActive(null)} onOrderUpdated={(o) => setActive(o)} />;
     }
     return <ActiveOrder order={active} onCleared={() => setActive(null)} onBack={() => setActive(null)} />;
   }

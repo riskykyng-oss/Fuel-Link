@@ -22,10 +22,12 @@ export function BiddingScreen({
   order,
   onCleared,
   onBack,
+  onOrderUpdated,
 }: {
   order: Order;
   onCleared: () => void;
   onBack?: () => void;
+  onOrderUpdated?: (order: Order) => void;
 }) {
   const { notify } = useToast();
   const [bids, setBids] = useState<Bid[]>([]);
@@ -55,6 +57,7 @@ export function BiddingScreen({
     try {
       const updated = await api.acceptBid(order.id, bid.id);
       setCurrent(updated);
+      onOrderUpdated?.(updated);
       notify(`Accepted ${bid.supplier_name ?? "provider"}'s offer of $${bid.proposed_amount.toFixed(2)}!`);
       if (pollRef.current) clearInterval(pollRef.current);
     } catch (error) {
@@ -68,14 +71,11 @@ export function BiddingScreen({
     if (current.status === "delivered") {
       return <DeliveredScreen order={current} onCleared={onCleared} onBack={onBack} />;
     }
-    if (current.payment_status === "paid" || current.payment_status === "held" || current.payment_status === "awaiting_confirmation" || current.payment_status === "created") {
-      return null;
-    }
-    if (current.status === "accepted" && current.payment_status !== "paid") {
+    if (current.status === "accepted" && current.payment_status !== "paid" && current.payment_status !== "held" && current.payment_status !== "awaiting_confirmation") {
       return (
         <PaymentScreen
           order={current}
-          onPaid={(o) => setCurrent(o)}
+          onPaid={(o) => { setCurrent(o); onOrderUpdated?.(o); }}
           onCancel={async () => {
             try { await api.setOrderStatus(current.id, "cancelled"); notify("Request cancelled."); onCleared(); }
             catch (e) { notify(e instanceof ApiError ? e.message : "Could not cancel.", "error"); }

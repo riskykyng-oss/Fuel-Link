@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { Icon } from "../../components/brand";
 import { MapView, type MapMarker } from "../../components/map";
-import { api, ApiError, type Order } from "../../lib/api";
+import { api, ApiError, type Order, type SealedContainer } from "../../lib/api";
 import { serviceLabel } from "../../lib/services";
 import { useToast } from "../../state";
 import type { SupplierStore } from "./useSupplier";
@@ -16,6 +16,7 @@ export function ActiveJob({ store }: { store: SupplierStore }) {
   const [codeEntry, setCodeEntry] = useState("");
   const [sealScan, setSealScan] = useState("");
   const [sealArrive, setSealArrive] = useState("");
+  const [containers, setContainers] = useState<SealedContainer[]>([]);
 
   const order = active!;
 
@@ -24,6 +25,10 @@ export function ActiveJob({ store }: { store: SupplierStore }) {
   useEffect(() => setSealScan(""), [active?.id]);
   useEffect(() => setSealArrive(""), [active?.id]);
   useEffect(() => setSeconds(0), [active?.id]);
+
+  useEffect(() => {
+    api.supplierContainers().then((res) => setContainers(res.containers)).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const timer = window.setInterval(() => setSeconds((s) => s + 1), 1000);
@@ -216,14 +221,21 @@ export function ActiveJob({ store }: { store: SupplierStore }) {
             </div>
             {isFuel && (
               <label className="field" style={{ marginTop: 8 }}>
-                <span>Arrival seal scan (serial)</span>
-                <input
-                  inputMode="text"
-                  placeholder="SC-…"
-                  style={{ fontFamily: "var(--data)" }}
+                <span>Arrival seal (confirm container)</span>
+                <select
                   value={sealArrive}
-                  onChange={(e) => setSealArrive(e.target.value.toUpperCase())}
-                />
+                  onChange={(e) => setSealArrive(e.target.value)}
+                  style={{ fontFamily: "var(--data)" }}
+                >
+                  <option value="">Select a container…</option>
+                  {containers
+                    .filter((c) => c.status === "available" || c.serial === sealScan)
+                    .map((c) => (
+                      <option key={c.serial} value={c.serial}>
+                        {c.serial} — {c.capacity_litres} L
+                      </option>
+                    ))}
+                </select>
               </label>
             )}
             <label className="field" style={{ marginTop: 8 }}>
@@ -255,14 +267,21 @@ export function ActiveJob({ store }: { store: SupplierStore }) {
             )}
             {stage === "accepted" && isFuel && (
               <label className="field" style={{ minWidth: 220, flex: 1 }}>
-                <span>Dispatch seal scan (serial)</span>
-                <input
-                  inputMode="text"
-                  placeholder="SC-…"
-                  style={{ fontFamily: "var(--data)" }}
+                <span>Dispatch seal (select container)</span>
+                <select
                   value={sealScan}
-                  onChange={(e) => setSealScan(e.target.value.toUpperCase())}
-                />
+                  onChange={(e) => setSealScan(e.target.value)}
+                  style={{ fontFamily: "var(--data)" }}
+                >
+                  <option value="">Select a container…</option>
+                  {containers
+                    .filter((c) => c.status === "available")
+                    .map((c) => (
+                      <option key={c.serial} value={c.serial}>
+                        {c.serial} — {c.capacity_litres} L
+                      </option>
+                    ))}
+                </select>
               </label>
             )}
             {stage === "in_transit" && (
