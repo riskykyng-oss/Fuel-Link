@@ -566,6 +566,178 @@ textarea {
   font-size: 12px;
 }
 
+/* ── Animated supplier car marker ────────────────────────────────────── */
+.pin--animated {
+  background: #e74c3c;
+  border-color: #fff;
+  box-shadow: 0 0 12px 3px rgba(231, 76, 60, 0.6), 0 2px 8px rgba(0,0,0,0.35);
+  animation: car-pulse 2s ease-in-out infinite;
+}
+.pin--animated .pin__car {
+  font-size: 18px;
+  line-height: 1;
+}
+@keyframes car-pulse {
+  0%, 100% { box-shadow: 0 0 12px 3px rgba(231, 76, 60, 0.6), 0 2px 8px rgba(0,0,0,0.35); }
+  50% { box-shadow: 0 0 20px 6px rgba(231, 76, 60, 0.8), 0 2px 8px rgba(0,0,0,0.35); }
+}
+
+/* ── Tracking back button ────────────────────────────────────────────── */
+.tracking-back {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 500;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: var(--bg);
+  color: var(--text);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+/* ── Live ETA overlay ────────────────────────────────────────────────── */
+.tracking-eta {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 500;
+}
+.tracking-eta__ring {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--bg);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.25);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 2;
+}
+.tracking-eta__number {
+  font-family: var(--data);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--acid);
+}
+.tracking-eta__unit {
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.tracking-eta__pulse {
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  right: -4px;
+  bottom: -4px;
+  border-radius: 50%;
+  border: 2px solid var(--acid);
+  animation: eta-pulse 2s ease-out infinite;
+  z-index: 1;
+}
+@keyframes eta-pulse {
+  0% { opacity: 0.7; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.4); }
+}
+
+/* ── Request card (supplier inDrive-style) ───────────────────────────── */
+.request-card {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 10px;
+  background: var(--surface);
+}
+.request-card__icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--accent-fill);
+  color: var(--accent-ink);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.request-card__dist {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--surface-2);
+  padding: 4px 8px;
+  border-radius: 8px;
+}
+.request-card__customer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.request-card__offer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--surface-2);
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+}
+.request-card__actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.request-card__actions .btn--primary { flex: 1; min-width: 90px; }
+.request-card__actions .btn--bid { flex: 1; min-width: 110px; background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
+.request-card__actions .btn--bid:hover { border-color: var(--accent-text); }
+.request-card__actions .btn--decline { flex: 0 0 auto; }
+.request-card__bid-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background: var(--surface-2);
+  border-radius: var(--r-sm);
+  border: 1px dashed var(--accent-text);
+}
+.request-card__note-input {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+}
+.request-card__bid-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* ── Bid card (customer view) ────────────────────────────────────────── */
+.bid-card {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--surface);
+  margin-bottom: 10px;
+}
+
 /* ── Sheet (bottom drawer) ───────────────────────────────────────────── */
 .sheet {
   position: relative;

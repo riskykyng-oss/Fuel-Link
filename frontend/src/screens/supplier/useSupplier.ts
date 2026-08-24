@@ -4,14 +4,14 @@ import { api, ApiError, type Order, type SupplierSummary } from "../../lib/api";
 import { HARARE } from "../../lib/services";
 import { useSession, useToast } from "../../state";
 
-export type Section = "dashboard" | "jobs" | "couriers" | "stock" | "services";
+export type Section = "requests" | "active" | "couriers" | "stock" | "services";
 
 export const POLL_MS = 6000;
 
 export interface SupplierStore {
   online: boolean;
   summary: SupplierSummary | null;
-  jobs: Order[];
+  requests: Order[];
   orders: Order[];
   active: Order | null;
   loading: boolean;
@@ -21,10 +21,10 @@ export interface SupplierStore {
   toggleOnline: () => Promise<void>;
   accept: (order: Order) => Promise<void>;
   decline: (order: Order) => Promise<void>;
+  placeBid: (order: Order, amount: number, note?: string) => Promise<void>;
   load: () => Promise<void>;
 }
 
-/** All data + actions for the garage workspace, shared by desktop & mobile layouts. */
 export function useSupplier(): SupplierStore {
   const { user, refresh } = useSession();
   const { notify } = useToast();
@@ -32,11 +32,11 @@ export function useSupplier(): SupplierStore {
 
   const [online, setOnline] = useState(profile?.is_online ?? false);
   const [summary, setSummary] = useState<SupplierSummary | null>(null);
-  const [jobs, setJobs] = useState<Order[]>([]);
+  const [requests, setRequests] = useState<Order[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [active, setActive] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
-  const [section, setSection] = useState<Section>("dashboard");
+  const [section, setSection] = useState<Section>("requests");
   const [position, setPosition] = useState<[number, number]>([
     profile?.current_lat ?? HARARE[0],
     profile?.current_lng ?? HARARE[1],
@@ -47,11 +47,11 @@ export function useSupplier(): SupplierStore {
       const current = await api.activeOrder();
       setActive(current);
       const [feed, stats, history] = await Promise.all([
-        current ? Promise.resolve([]) : api.availableJobs(),
+        current ? Promise.resolve([]) : api.pendingRequests(),
         api.supplierSummary(),
         api.orders(),
       ]);
-      setJobs(feed);
+      setRequests(feed);
       setSummary(stats);
       setOrders(history);
     } catch {
@@ -87,7 +87,7 @@ export function useSupplier(): SupplierStore {
     try {
       await api.setOnline(next);
       await refresh();
-      notify(next ? "You are online. Jobs will come through." : "You are offline.");
+      notify(next ? "You are online. Requests will come through." : "You are offline.");
     } catch {
       setOnline(!next);
       notify("Could not change your status.", "error");
@@ -107,17 +107,27 @@ export function useSupplier(): SupplierStore {
   async function decline(order: Order) {
     try {
       await api.rejectOrder(order.id);
-      setJobs((prev) => prev.filter((j) => j.id !== order.id));
+      setRequests((prev) => prev.filter((r) => r.id !== order.id));
       notify(`Job ${order.reference} declined.`);
     } catch (error) {
       notify(error instanceof ApiError ? error.message : "Could not decline.", "error");
     }
   }
 
+  async function placeBid(order: Order, amount: number, note?: string) {
+    try {
+      await api.placeBid(order.id, amount, note);
+      notify(`Your offer of $${amount.toFixed(2)} sent for ${order.reference}.`);
+      setRequests((prev) => prev.filter((r) => r.id !== order.id));
+    } catch (error) {
+      notify(error instanceof ApiError ? error.message : "Could not send offer.", "error");
+    }
+  }
+
   return {
     online,
     summary,
-    jobs,
+    requests,
     orders,
     active,
     loading,
@@ -127,6 +137,7 @@ export function useSupplier(): SupplierStore {
     toggleOnline,
     accept,
     decline,
+    placeBid,
     load,
   };
 }

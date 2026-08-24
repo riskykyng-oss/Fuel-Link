@@ -1035,17 +1035,22 @@ export function trackOrder(orderId: number, onFrame: (frame: TrackingFrame) => v
         .eq("id", orderId)
         .single();
       if (!data) return;
-      const { data: supplier } = await supabase
-        .from("supplier_profiles").select("current_lat, current_lng").eq("user_id", data.supplier_id || 0).maybeSingle();
-      const remaining_km = supplier?.current_lat && data.pickup_lat
-        ? roadDistanceKm(supplier.current_lat, supplier.current_lng, data.pickup_lat, data.pickup_lng) : 0;
+      const { data: supplierProfile } = await supabase
+        .from("supplier_profiles").select("current_lat, current_lng, is_verified").eq("user_id", data.supplier_id || 0).maybeSingle();
+      const { data: supplierUser } = data.supplier_id
+        ? await supabase.from("users").select("full_name, phone_number").eq("id", data.supplier_id).single()
+        : { data: null };
+      const remaining_km = supplierProfile?.current_lat && data.pickup_lat
+        ? roadDistanceKm(supplierProfile.current_lat, supplierProfile.current_lng, data.pickup_lat, data.pickup_lng) : 0;
       onFrame({
         order_id: data.id, reference: data.reference, status: data.status as OrderStatus,
         payment_status: null,
-        supplier_lat: supplier?.current_lat || null, supplier_lng: supplier?.current_lng || null,
+        supplier_lat: supplierProfile?.current_lat || null, supplier_lng: supplierProfile?.current_lng || null,
         pickup_lat: data.pickup_lat || 0, pickup_lng: data.pickup_lng || 0,
         remaining_km, eta_minutes: data.eta_minutes || 0,
-        supplier_name: null, supplier_phone: null, provider_verified: false,
+        supplier_name: supplierUser?.full_name ?? null,
+        supplier_phone: supplierUser?.phone_number ?? null,
+        provider_verified: supplierProfile?.is_verified ?? false,
         provider_staff_id: data.provider_staff_id, handover_code: data.handover_code,
       });
       if (data.status === "delivered" || data.status === "cancelled") {

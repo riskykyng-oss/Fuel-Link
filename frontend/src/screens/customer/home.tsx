@@ -15,7 +15,6 @@ import {
   api,
   ApiError,
   type Order,
-  type PaymentMethod,
   type Quote,
   type ServiceType,
   type SymptomType,
@@ -43,24 +42,7 @@ const DIRECT_SERVICES: ServiceType[] = [
   "mechanic",
 ];
 const LITRE_PRESETS = [5, 10, 15, 20];
-type Step = "triage" | "details" | "quote" | "pay" | "done";
-function Steps({ current, total }: { current: number; total: number }) {
-  return (
-    <div className="steps">
-      {" "}
-      <div className="steps__bar" aria-hidden="true">
-        {" "}
-        {Array.from({ length: total }, (_, i) => (
-          <span key={i} className={i < current ? "is-on" : ""} />
-        ))}{" "}
-      </div>{" "}
-      <span className="steps__label">
-        {" "}
-        STEP {current} / {total}{" "}
-      </span>{" "}
-    </div>
-  );
-}
+type Step = "triage" | "details" | "quote" | "done";
 function timeAgo(ts: number, now: number): string {
   const s = Math.max(0, Math.floor((now - ts) / 1000));
   if (s < 5) return "just now";
@@ -94,10 +76,6 @@ export function CustomerHome() {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [quote, setQuote] = useState<Quote | null>(null);
   const [quoting, setQuoting] = useState(false);
-  const [methods, setMethods] = useState<PaymentMethod[]>([]);
-  const [method, setMethod] = useState("ecocash");
-  const [payerPhone, setPayerPhone] = useState(user?.phone_number ?? "");
-  const [placing, setPlacing] = useState(false);
   const [placed, setPlaced] = useState<Order | null>(null);
   const requestKey = useRef<string | null>(null);
   useEffect(() => {
@@ -155,12 +133,6 @@ export function CustomerHome() {
       .catch(() => notify("Cannot reach the FuelLink server.", "error"))
       .finally(() => setLoading(false));
   }, [notify]);
-  useEffect(() => {
-    api
-      .paymentMethods()
-      .then(setMethods)
-      .catch(() => setMethods([]));
-  }, []);
   const service: ServiceType =
     direct ?? (symptom ? resolveService(symptom, answer) : "mechanic");
   const question = followUpQuestion(symptom);
@@ -232,7 +204,6 @@ export function CustomerHome() {
       setStep("done");
       return;
     }
-    setPlacing(true);
     try {
       const order = await api.createOrder({
         pickup_lat: pin[0],
@@ -247,8 +218,11 @@ export function CustomerHome() {
         notes: notes || null,
         photo_url: photoUrl,
         client_request_id: requestKey.current,
-        payment_method: method,
-        payer_phone: payerPhone || null,
+        total_amount: quote!.total_amount,
+        distance_km: quote!.distance_km,
+        fuel_cost: quote!.fuel_cost,
+        delivery_fee: quote!.delivery_fee,
+        service_fee: quote!.service_fee,
       });
       if (requestKey.current) clearOfflineRequest(requestKey.current);
       requestKey.current = null;
@@ -264,8 +238,6 @@ export function CustomerHome() {
           : "Could not submit the request.",
         "error",
       );
-    } finally {
-      setPlacing(false);
     }
   }
   function trackPlaced() {
@@ -315,53 +287,34 @@ export function CustomerHome() {
       />
     );
   }
-  if (step === "quote" || step === "pay") {
+  if (step === "quote") {
     return (
       <div className="screen" style={{ position: "relative" }}>
-        {" "}
         <div style={{ position: "absolute", inset: 0 }}>
-          {" "}
           <MapView
             center={pin}
             markers={markers}
             recenterKey={recenter}
             interactive={false}
-          />{" "}
-        </div>{" "}
+          />
+        </div>
         <div style={{ position: "relative", marginTop: "auto", zIndex: 400 }}>
-          {" "}
           <Sheet>
-            {" "}
             <div className="stack">
-              {" "}
               {quote && !quote.coverage ? (
                 <NoCoverage quote={quote} onBack={() => setStep("details")} />
-              ) : step === "pay" ? (
-                <PayStep
-                  quote={quote}
-                  methods={methods}
-                  method={method}
-                  setMethod={setMethod}
-                  payerPhone={payerPhone}
-                  setPayerPhone={setPayerPhone}
-                  placing={placing}
-                  onSubmit={confirmRequest}
-                  onBack={() => setStep("quote")}
-                />
               ) : (
                 quote && (
                   <QuoteStep
                     quote={quote}
-                    service={service}
-                    pin={pin}
-                    onConfirm={() => setStep("pay")}
+                    onConfirm={confirmRequest}
                     onBack={() => setStep("details")}
                   />
                 )
-              )}{" "}
-            </div>{" "}
-          </Sheet>{" "}
-        </div>{" "}
+              )}
+            </div>
+          </Sheet>
+        </div>
       </div>
     );
   }
@@ -418,9 +371,8 @@ export function CustomerHome() {
               <div className="between">
                 {" "}
                 <div>
-                  {" "}
-                  <Steps current={2} total={3} /> <h1>Where are you?</h1>{" "}
-                </div>{" "}
+                  <h1>Where are you?</h1>
+                </div>
                 <button
                   type="button"
                   className="btn btn--sm"
@@ -592,47 +544,34 @@ export function CustomerHome() {
   }
   return (
     <div className="screen">
-      {" "}
       <div
         className="pad stack"
         style={{ maxWidth: 560, margin: "0 auto", width: "100%" }}
       >
-        {" "}
         <div className="pin-row between">
-          {" "}
           <div>
-            {" "}
             <p className="pin-row__line">
-              {" "}
-              {street ?? (manual ? "Dropped pin" : "Current location")}{" "}
-            </p>{" "}
+              {street ?? (manual ? "Dropped pin" : "Current location")}
+            </p>
             <p className="data muted">
-              {" "}
-              {pin[0].toFixed(4)}, {pin[1].toFixed(4)}{" "}
-              {precise && locatedAt ? ` · ${timeAgo(locatedAt, now)}` : ""}{" "}
-            </p>{" "}
-          </div>{" "}
+              {pin[0].toFixed(4)}, {pin[1].toFixed(4)}
+              {precise && locatedAt ? ` · ${timeAgo(locatedAt, now)}` : ""}
+            </p>
+          </div>
           <button
             type="button"
             className="btn btn--sm"
-            onClick={() => {
-              setManual(false);
-              locate();
-            }}
+            onClick={() => { setManual(false); locate(); }}
           >
-            {" "}
-            <Icon name="target" size={15} />{" "}
-            {precise ? "Recentre" : "Use GPS"}{" "}
-          </button>{" "}
-        </div>{" "}
+            <Icon name="target" size={15} /> {precise ? "Recentre" : "Use GPS"}
+          </button>
+        </div>
         <div>
-          {" "}
-          <Steps current={1} total={3} /> <h1>What's wrong?</h1>{" "}
+          <h1>What's wrong?</h1>
           <p className="muted" style={{ marginTop: 4 }}>
-            {" "}
-            Tell us what happened and we'll send the right provider.{" "}
-          </p>{" "}
-        </div>{" "}
+            Tell us what happened and we'll send the right provider.
+          </p>
+        </div>
         <div className="service-grid">
           {" "}
           {SYMPTOMS.map((s) => (
@@ -856,95 +795,71 @@ function VehicleGateForm({ onDone }: { onDone: () => void }) {
 }
 function QuoteStep({
   quote,
-  service,
-  pin,
   onConfirm,
   onBack,
 }: {
   quote: Quote;
-  service: ServiceType;
-  pin: [number, number];
   onConfirm: () => void;
   onBack: () => void;
 }) {
   return (
     <div className="stack">
-      {" "}
       <div className="between">
-        {" "}
         <div>
-          {" "}
-          <Steps current={3} total={3} />{" "}
-          <h2 style={{ marginTop: 4 }}>Providers near you</h2>{" "}
-        </div>{" "}
+          <h2>Providers near you</h2>
+        </div>
         <button type="button" className="btn btn--sm" onClick={onBack}>
-          {" "}
-          <Icon name="back" size={15} /> Edit{" "}
-        </button>{" "}
-      </div>{" "}
+          <Icon name="back" size={15} /> Edit
+        </button>
+      </div>
       <div className="stack" style={{ gap: 8 }}>
-        {" "}
         {quote.providers.map((p, index) => (
           <div
             key={`${p.name}-${index}`}
             className="tile row"
             style={{ gap: 10 }}
           >
-            {" "}
             <span
               className="avatar avatar--ring-green"
               style={{ width: 40, height: 40 }}
             >
-              {" "}
-              {p.name.charAt(0).toUpperCase()}{" "}
-            </span>{" "}
+              {p.name.charAt(0).toUpperCase()}
+            </span>
             <div className="grow">
-              {" "}
               <div className="between">
-                {" "}
-                <strong style={{ fontSize: 14 }}>{p.name}</strong>{" "}
-                <span className="data small">{p.eta_minutes} min</span>{" "}
-              </div>{" "}
+                <strong style={{ fontSize: 14 }}>{p.name}</strong>
+                <span className="data small">{p.eta_minutes} min</span>
+              </div>
               <p className="small muted">
-                {" "}
-                {p.distance_km.toFixed(1)} km away{" "}
+                {p.distance_km.toFixed(1)} km away
                 {p.is_verified && (
                   <span className="badge badge--ok" style={{ marginLeft: 6 }}>
-                    {" "}
-                    <Icon name="shield" size={10} /> Verified{" "}
+                    <Icon name="shield" size={10} /> Verified
                   </span>
-                )}{" "}
+                )}
                 {p.rating != null && p.rating > 0 && (
                   <span className="muted"> · ★ {p.rating.toFixed(1)}</span>
-                )}{" "}
-              </p>{" "}
-            </div>{" "}
+                )}
+              </p>
+            </div>
           </div>
-        ))}{" "}
-      </div>{" "}
-      <PumpReadout amount={quote.total_amount} caption="Total to pay" />{" "}
-      <QuoteLedger quote={quote} />{" "}
+        ))}
+      </div>
+      <PumpReadout amount={quote.total_amount} caption="Your offer to providers" />
+      <QuoteLedger quote={quote} />
+      <p className="small muted" style={{ textAlign: "center" }}>
+        Suppliers will see your request and send counter-offers. You pick the best one.
+      </p>
       <button
         type="button"
         className="btn btn--primary btn--block"
         onClick={onConfirm}
       >
-        {" "}
-        Confirm & pay{" "}
-      </button>{" "}
-      <a
-        className="small muted"
-        href={`sms:${EMERGENCY_LINE}?body=${encodeURIComponent(`FuelLink request. ${serviceLabel(service)}. Pin: ${pin[0].toFixed(4)}, ${pin[1].toFixed(4)}`)}`}
-        style={{ textAlign: "center" }}
-      >
-        {" "}
-        No data? Send by SMS instead{" "}
-      </a>{" "}
+        Submit request
+      </button>
       <a className="panic-link" href={`tel:${EMERGENCY_LINE}`}>
-        {" "}
-        <Icon name="triangle" size={14} /> I feel unsafe — call the emergency
-        line{" "}
-      </a>{" "}
+        <Icon name="triangle" size={14} /> I feel unsafe — call the emergency line
+      </a>
     </div>
   );
 }
@@ -985,133 +900,6 @@ function NoCoverage({ quote, onBack }: { quote: Quote; onBack: () => void }) {
       <a className="unsafe-btn" href={`tel:${EMERGENCY_LINE}`}>
         {" "}
         <Icon name="siren" size={18} /> Call the emergency line{" "}
-      </a>{" "}
-    </div>
-  );
-}
-function PayStep({
-  quote,
-  methods,
-  method,
-  setMethod,
-  payerPhone,
-  setPayerPhone,
-  placing,
-  onSubmit,
-  onBack,
-}: {
-  quote: Quote | null;
-  methods: PaymentMethod[];
-  method: string;
-  setMethod: (m: string) => void;
-  payerPhone: string;
-  setPayerPhone: (p: string) => void;
-  placing: boolean;
-  onSubmit: () => void;
-  onBack: () => void;
-}) {
-  if (!quote) return null;
-  const selected = methods.find((m) => m.id === method);
-  return (
-    <div className="stack">
-      {" "}
-      <div className="between">
-        {" "}
-        <div>
-          {" "}
-          <p className="eyebrow">Confirm & pay</p>{" "}
-          <h2 style={{ marginTop: 4 }}>Funds are held, not sent</h2>{" "}
-        </div>{" "}
-        <button type="button" className="btn btn--sm" onClick={onBack}>
-          {" "}
-          <Icon name="back" size={15} /> Back{" "}
-        </button>{" "}
-      </div>{" "}
-      <PumpReadout
-        amount={quote.total_amount}
-        caption="Held against your request"
-      />{" "}
-      <p className="eyebrow">Pay with</p>{" "}
-      <div className="stack" style={{ gap: 8 }}>
-        {" "}
-        {methods.map((m) => (
-          <button
-            key={m.id}
-            type="button"
-            className="station"
-            aria-pressed={method === m.id}
-            onClick={() => setMethod(m.id)}
-            style={{ alignItems: "center" }}
-          >
-            {" "}
-            <span
-              className="row"
-              style={{
-                width: 46,
-                height: 46,
-                justifyContent: "center",
-                borderRadius: 12,
-                background: "var(--surface-2)",
-                flex: "none",
-              }}
-            >
-              {" "}
-              <Icon name="phone" size={20} />
-            </span>{" "}
-            <div className="grow">
-              {" "}
-              <div className="between">
-                {" "}
-                <strong style={{ fontSize: 14 }}>{m.name}</strong>{" "}
-                {!m.live && <span className="eyebrow">test mode</span>}{" "}
-              </div>{" "}
-              <p className="small muted">{m.note}</p>{" "}
-            </div>{" "}
-          </button>
-        ))}{" "}
-      </div>{" "}
-      {selected?.requires_phone && (
-        <Field
-          label="Number to charge"
-          value={payerPhone}
-          onChange={(e) => setPayerPhone(e.target.value)}
-          inputMode="tel"
-          hint={
-            selected.prefixes.length
-              ? `Accepts ${selected.prefixes.join(", ")} numbers.`
-              : undefined
-          }
-        />
-      )}{" "}
-      <div className="tile row" style={{ gap: 10 }}>
-        {" "}
-        <span style={{ color: "var(--acid)" }}>
-          {" "}
-          <Icon name="shield" size={16} />{" "}
-        </span>{" "}
-        <p className="small muted">
-          {" "}
-          The amount is held against your request. The provider is only paid
-          after the verified handover at your pin.{" "}
-        </p>{" "}
-      </div>{" "}
-      <button
-        type="button"
-        className="btn btn--primary btn--block"
-        disabled={placing}
-        onClick={onSubmit}
-      >
-        {" "}
-        {placing ? (
-          <span className="spinner" />
-        ) : (
-          `Hold $${quote.total_amount.toFixed(2)} & request`
-        )}{" "}
-      </button>{" "}
-      <a className="panic-link" href={`tel:${EMERGENCY_LINE}`}>
-        {" "}
-        <Icon name="triangle" size={14} /> I feel unsafe — call the emergency
-        line{" "}
       </a>{" "}
     </div>
   );

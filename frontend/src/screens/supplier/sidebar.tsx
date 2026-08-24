@@ -5,8 +5,8 @@ import { useSession, useTheme } from "../../state";
 import type { Section } from "./useSupplier";
 
 export const NAV: { id: Section; label: string; icon: IconName }[] = [
-  { id: "dashboard", label: "Dashboard", icon: "home" },
-  { id: "jobs", label: "Jobs", icon: "clock" },
+  { id: "requests", label: "Requests", icon: "route" },
+  { id: "active", label: "Active jobs", icon: "clock" },
   { id: "couriers", label: "Team", icon: "truck" },
   { id: "stock", label: "Fuel stock", icon: "box" },
   { id: "services", label: "Services", icon: "grid" },

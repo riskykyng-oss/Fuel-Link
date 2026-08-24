@@ -14,6 +14,7 @@ export function ActiveOrder({ order, onCleared, onBack }: { order: Order; onClea
   const { notify } = useToast();
   const [current, setCurrent] = useState(order);
   const [frame, setFrame] = useState<TrackingFrame | null>(null);
+  const [trail, setTrail] = useState<[number, number][]>([]);
   const settled =
     current.payment_status === "paid" ||
     current.payment_status === "awaiting_confirmation" ||
@@ -35,6 +36,14 @@ export function ActiveOrder({ order, onCleared, onBack }: { order: Order; onClea
       supplier_lng: frame.supplier_lng,
       eta_minutes: frame.eta_minutes,
     }));
+    if (frame.supplier_lat != null && frame.supplier_lng != null) {
+      setTrail((prev) => {
+        const last = prev[prev.length - 1];
+        if (last && last[0] === frame.supplier_lat && last[1] === frame.supplier_lng) return prev;
+        const next = [...prev, [frame.supplier_lat, frame.supplier_lng] as [number, number]];
+        return next.length > 50 ? next.slice(-50) : next;
+      });
+    }
   }, [frame]);
 
   async function cancel() {
@@ -52,9 +61,7 @@ export function ActiveOrder({ order, onCleared, onBack }: { order: Order; onClea
     if (navigator.share) {
       try {
         await navigator.share({ text });
-      } catch {
-        /* dismissed */
-      }
+      } catch { /* dismissed */ }
     } else {
       await navigator.clipboard.writeText(text).catch(() => undefined);
       notify("Trip details copied to clipboard.");
@@ -76,14 +83,7 @@ export function ActiveOrder({ order, onCleared, onBack }: { order: Order; onClea
   const pickup: [number, number] = [current.pickup_lat ?? 0, current.pickup_lng ?? 0];
 
   const markers: MapMarker[] = [
-    {
-      id: "pickup",
-      lat: pickup[0],
-      lng: pickup[1],
-      kind: "pickup",
-      glyph: "◎",
-      label: "You",
-    },
+    { id: "pickup", lat: pickup[0], lng: pickup[1], kind: "pickup", glyph: "◎", label: "You" },
   ];
   if (supplierAt) {
     markers.push({
@@ -91,13 +91,24 @@ export function ActiveOrder({ order, onCleared, onBack }: { order: Order; onClea
       lat: supplierAt[0],
       lng: supplierAt[1],
       kind: "supplier",
-      glyph: "▲",
+      glyph: "",
       label: frame?.supplier_name ?? "Provider",
     });
   }
 
-  const verified = frame?.provider_verified ?? false;
-  const staffId = frame?.provider_staff_id ?? current.provider_staff_id;
+  const routePoints: [number, number][] = supplierAt ? [supplierAt, pickup] : [];
+  const eta = frame?.eta_minutes ?? current.eta_minutes;
+
+  const statusLabel =
+    current.status === "pending" || current.status === "offered" || current.status === "bidding"
+      ? "Finding a provider"
+      : current.status === "arrived"
+        ? "Your provider is here"
+        : current.status === "in_transit"
+          ? "On the way"
+          : current.status === "accepted"
+            ? "Provider assigned"
+            : `${eta} min away`;
 
   return (
     <div className="screen" style={{ position: "relative" }}>
@@ -105,19 +116,28 @@ export function ActiveOrder({ order, onCleared, onBack }: { order: Order; onClea
         <MapView
           center={supplierAt ?? pickup}
           markers={markers}
-          route={supplierAt ? [supplierAt, pickup] : null}
+          route={routePoints.length >= 2 ? routePoints : null}
+          trail={trail.length >= 2 ? trail : null}
+          fitBounds={!!supplierAt}
         />
       </div>
-      {onBack && (
-        <button
-          type="button"
-          className="btn btn--sm"
-          onClick={onBack}
-          style={{ position: "absolute", top: 12, left: 12, zIndex: 500, background: "var(--bg)", borderRadius: 10 }}
-        >
-          <Icon name="back" size={15} /> Back
-        </button>
-      )}
+
+      <button
+        type="button"
+        className="tracking-back"
+        onClick={onBack}
+        aria-label="Go back"
+      >
+        <Icon name="back" size={18} />
+      </button>
+
+      <div className="tracking-eta">
+        <div className="tracking-eta__ring">
+          <span className="tracking-eta__number">{eta}</span>
+          <span className="tracking-eta__unit">min</span>
+        </div>
+        <span className="tracking-eta__pulse" />
+      </div>
 
       <div style={{ position: "relative", marginTop: "auto", zIndex: 400 }}>
         <Sheet>
@@ -125,13 +145,7 @@ export function ActiveOrder({ order, onCleared, onBack }: { order: Order; onClea
             <div className="between">
               <div>
                 <p className="eyebrow">Order {current.reference}</p>
-                <h2 style={{ marginTop: 4 }}>
-                  {current.status === "pending" || current.status === "offered"
-                    ? "Finding a provider"
-                    : current.status === "arrived"
-                      ? "Your provider is here"
-                      : `${frame?.eta_minutes ?? current.eta_minutes} min away`}
-                </h2>
+                <h2 style={{ marginTop: 4 }}>{statusLabel}</h2>
               </div>
               <span className="badge badge--ok">
                 <Icon name="shield" size={12} />
@@ -150,13 +164,12 @@ export function ActiveOrder({ order, onCleared, onBack }: { order: Order; onClea
                   <div className="between">
                     <strong style={{ fontSize: 14 }}>{frame.supplier_name}</strong>
                     <a className="btn btn--sm" href={`tel:${frame.supplier_phone ?? ""}`}>
-                      <Icon name="phone" size={15} />
-                      Call
+                      <Icon name="phone" size={15} /> Call
                     </a>
                   </div>
-                  {verified && <span className="badge badge--ok">Verified provider</span>}
+                  {frame.provider_verified && <span className="badge badge--ok">Verified provider</span>}
                   <div className="row" style={{ gap: 6, marginTop: 7, flexWrap: "wrap" }}>
-                    {staffId && <span className="id-chip">Staff {staffId}</span>}
+                    {frame.provider_staff_id && <span className="id-chip">Staff {frame.provider_staff_id}</span>}
                     {current.sealed_container_id && (
                       <span className="id-chip">
                         <Icon name="seal" size={12} />
@@ -235,7 +248,7 @@ export function ActiveOrder({ order, onCleared, onBack }: { order: Order; onClea
               Share trip with a contact
             </button>
 
-            {(current.status === "pending" || current.status === "offered") && (
+            {(current.status === "pending" || current.status === "offered" || current.status === "bidding") && (
               <button type="button" className="btn btn--danger btn--block" onClick={cancel}>
                 Cancel request
               </button>

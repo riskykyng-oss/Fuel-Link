@@ -12,7 +12,7 @@ import { CouriersSection } from "./couriers";
 import {
   ComplianceCard,
   EarningsChart,
-  JobQueue,
+  RequestQueue,
   Kpis,
   LiveMap,
   RecentJobs,
@@ -22,9 +22,9 @@ import {
 } from "./cards";
 
 const SECTION_TITLES: Record<string, { title: string; sub: string }> = {
-  dashboard: { title: "Dashboard", sub: "Live queue, coverage and today's activity." },
-  jobs: { title: "Jobs", sub: "Outstanding offers and your recent job history." },
-  couriers: { title: "Team", sub: "The people who execute your jobs — shift state and accounts." },
+  requests: { title: "Incoming requests", sub: "Customer requests waiting for your offer." },
+  active: { title: "Active jobs", sub: "Your current and recent jobs." },
+  couriers: { title: "Team", sub: "Staff management — shift states and accounts." },
   stock: { title: "Fuel stock", sub: "Litres on the tanker against the ZERA cap." },
   services: { title: "Services", sub: "What you offer motorists and at what callout fee." },
 };
@@ -34,22 +34,18 @@ function SectionHead({ section }: { section: string }) {
   return (
     <div className="dash__section">
       <h1 style={{ margin: 0 }}>{meta.title}</h1>
-      <p className="muted small" style={{ marginTop: 4 }}>
-        {meta.sub}
-      </p>
+      <p className="muted small" style={{ marginTop: 4 }}>{meta.sub}</p>
     </div>
   );
 }
 
 function SupplierDesktop({ store }: { store: SupplierStore }) {
-  const { online, summary, jobs, orders, position, section, setSection, toggleOnline, accept, decline } =
+  const { online, summary, requests, orders, position, section, setSection, toggleOnline, accept, decline, placeBid } =
     store;
   const { user, refresh } = useSession();
   const profile = user?.supplier_profile ?? null;
 
-  useEffect(() => {
-    window.scrollTo({ top: 0 });
-  }, [section]);
+  useEffect(() => { window.scrollTo({ top: 0 }); }, [section]);
 
   return (
     <div className="dash">
@@ -63,34 +59,38 @@ function SupplierDesktop({ store }: { store: SupplierStore }) {
           <div className="dash__meta">
             {profile?.is_verified && (
               <span className="badge badge--ok">
-                <Icon name="shield" size={12} />
-                ZERA verified
+                <Icon name="shield" size={12} /> ZERA verified
               </span>
             )}
           </div>
         </div>
 
-        {section === "dashboard" && (
+        {section === "requests" && (
           <div className="stack">
-            <Kpis summary={summary} jobs={jobs} orders={orders} />
+            <Kpis summary={summary} requests={requests} orders={orders} />
+            <div className="grid-2">
+              <LiveMap position={position} requests={requests} />
+              <RequestQueue
+                requests={requests}
+                onAccept={accept}
+                onDecline={decline}
+                onBid={placeBid}
+                online={online}
+                summary={summary}
+              />
+            </div>
             <div className="grid-2">
               <ComplianceCard summary={summary} />
               <StockCard summary={summary} />
             </div>
-            <div className="grid-2">
-              <LiveMap position={position} jobs={jobs} />
-              <JobQueue jobs={jobs} onAccept={accept} onDecline={decline} online={online} summary={summary} />
-            </div>
-            <RecentJobs orders={orders} />
-            <EarningsChart orders={orders} />
           </div>
         )}
 
-        {section === "jobs" && (
+        {section === "active" && (
           <div className="stack">
-            <SectionHead section="jobs" />
-            <JobQueue jobs={jobs} onAccept={accept} onDecline={decline} online={online} summary={summary} />
+            <SectionHead section="active" />
             <RecentJobs orders={orders} />
+            <EarningsChart orders={orders} />
           </div>
         )}
 
@@ -150,7 +150,7 @@ export function SupplierHome() {
               style={{ alignSelf: "flex-end" }}
               onClick={() => setViewDashboard(true)}
             >
-              <Icon name="route" size={14} /> View dashboard
+              <Icon name="route" size={14} /> View requests
             </button>
             <ActiveJob store={store} />
           </div>

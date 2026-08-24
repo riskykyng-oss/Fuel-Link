@@ -7,7 +7,6 @@ import {
   api,
   type Order,
   type SealedContainer,
-  type ServiceType,
   type SupplierSummary,
 } from "../../lib/api";
 import { SERVICE_CATALOGUE, serviceIcon, serviceLabel } from "../../lib/services";
@@ -17,11 +16,11 @@ import { useToast } from "../../state";
 
 export function Kpis({
   summary,
-  jobs,
+  requests,
   orders,
 }: {
   summary: SupplierSummary | null;
-  jobs: Order[];
+  requests: Order[];
   orders: Order[];
 }) {
   const today = new Date().toDateString();
@@ -31,11 +30,10 @@ export function Kpis({
   ).length;
 
   const kpis: { label: string; value: string; icon: IconName; danger?: boolean }[] = [
-    { label: "Incoming", value: String(jobs.length), icon: "route", danger: jobs.length > 0 },
+    { label: "Pending", value: String(requests.length), icon: "route", danger: requests.length > 0 },
     { label: "Active", value: String(active), icon: "clock" },
-    { label: "Completed today", value: String(completedToday), icon: "check" },
-    { label: "Earnings today", value: `$${(summary?.earnings_today ?? 0).toFixed(0)}`, icon: "wallet" },
-    { label: "Response rate", value: `${summary?.response_rate ?? 100}%`, icon: "chart" },
+    { label: "Done today", value: String(completedToday), icon: "check" },
+    { label: "Earnings", value: `$${(summary?.earnings_today ?? 0).toFixed(0)}`, icon: "wallet" },
   ];
 
   return (
@@ -55,8 +53,8 @@ export function Kpis({
 
 /* ── Live map ────────────────────────────────────────────────────────── */
 
-export function LiveMap({ position, jobs }: { position: [number, number]; jobs: Order[] }) {
-  const markers: MapMarker[] = jobs
+export function LiveMap({ position, requests }: { position: [number, number]; requests: Order[] }) {
+  const markers: MapMarker[] = requests
     .filter((j) => j.pickup_lat != null && j.pickup_lng != null)
     .map((j) => ({
       id: `job-${j.id}`,
@@ -72,14 +70,11 @@ export function LiveMap({ position, jobs }: { position: [number, number]; jobs: 
     lng: position[1],
     kind: "supplier",
     glyph: "▲",
-    label: "Your garage",
+    label: "You",
   });
 
   return (
-    <div
-      className="card"
-      style={{ padding: 0, overflow: "hidden", position: "relative", minHeight: 280 }}
-    >
+    <div className="card" style={{ padding: 0, overflow: "hidden", position: "relative", minHeight: 240 }}>
       <div style={{ position: "absolute", inset: 0 }}>
         <MapView center={position} markers={markers} zoom={12} interactive={false} />
       </div>
@@ -87,37 +82,134 @@ export function LiveMap({ position, jobs }: { position: [number, number]; jobs: 
   );
 }
 
-/* ── Request queue ───────────────────────────────────────────────────── */
+/* ── inDrive-style Request Card ──────────────────────────────────────── */
 
-function OfferCountdown({ expiresAt }: { expiresAt: string }) {
-  const target = new Date(expiresAt).getTime();
-  const [left, setLeft] = useState(() => Math.max(0, Math.floor((target - Date.now()) / 1000)));
-
-  useEffect(() => {
-    const timer = window.setInterval(
-      () => setLeft(Math.max(0, Math.floor((target - Date.now()) / 1000))),
-      1000,
-    );
-    return () => window.clearInterval(timer);
-  }, [target]);
-
-  const mm = Math.floor(left / 60);
-  const ss = String(left % 60).padStart(2, "0");
-  const urgent = left <= 15;
-
-  return <span className={`offer-timer${urgent ? " offer-timer--urgent" : ""}`}>{mm}:{ss}</span>;
-}
-
-export function JobQueue({
-  jobs,
+function RequestCard({
+  job,
   onAccept,
   onDecline,
+  onBid,
+}: {
+  job: Order;
+  onAccept: (o: Order) => void;
+  onDecline: (o: Order) => void;
+  onBid: (o: Order, amount: number, note: string) => void;
+}) {
+  const [bidAmount, setBidAmount] = useState(String(job.total_amount.toFixed(2)));
+  const [bidNote, setBidNote] = useState("");
+  const [showBid, setShowBid] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const customerAmount = job.total_amount;
+
+  async function submitBid() {
+    const amt = parseFloat(bidAmount);
+    if (isNaN(amt) || amt <= 0) return;
+    setBusy(true);
+    await onBid(job, amt, bidNote);
+    setBusy(false);
+  }
+
+  return (
+    <div className="request-card">
+      <div className="between">
+        <div className="row" style={{ gap: 8, alignItems: "center" }}>
+          <span className="request-card__icon">
+            <Icon name={serviceIcon(job.service_type)} size={18} />
+          </span>
+          <div>
+            <strong style={{ fontSize: 14 }}>{serviceLabel(job.service_type)}</strong>
+            {job.service_type === "fuel" && (
+              <span className="small muted"> · {job.quantity_litres.toFixed(0)} L {job.fuel_type}</span>
+            )}
+          </div>
+        </div>
+        <span className="request-card__dist">
+          <Icon name="route" size={13} />
+          {job.distance_km.toFixed(1)} km
+        </span>
+      </div>
+
+      <div className="request-card__customer">
+        <span className="avatar" style={{ width: 32, height: 32, fontSize: 13 }}>
+          {job.customer.full_name.charAt(0).toUpperCase()}
+        </span>
+        <div className="grow">
+          <strong style={{ fontSize: 13 }}>{job.customer.full_name}</strong>
+          {job.pickup_address && <p className="small muted">{job.pickup_address}</p>}
+        </div>
+      </div>
+
+      {job.notes && <p className="small" style={{ fontStyle: "italic", marginTop: 4 }}>"{job.notes}"</p>}
+
+      <div className="request-card__offer">
+        <span className="eyebrow">Customer's offer</span>
+        <span className="data acid" style={{ fontSize: 22 }}>${customerAmount.toFixed(2)}</span>
+      </div>
+
+      {!showBid ? (
+        <div className="request-card__actions">
+          <button type="button" className="btn btn--primary" onClick={() => onAccept(job)}>
+            <Icon name="check" size={15} /> Accept
+          </button>
+          <button type="button" className="btn btn--bid" onClick={() => { setShowBid(true); setBidAmount(String(customerAmount.toFixed(2))); }}>
+            <Icon name="wallet" size={15} /> Counter-offer
+          </button>
+          <button type="button" className="btn btn--decline" onClick={() => onDecline(job)}>
+            Decline
+          </button>
+        </div>
+      ) : (
+        <div className="request-card__bid-form">
+          <label className="field" style={{ margin: 0 }}>
+            <span>Your price</span>
+            <div className="row" style={{ gap: 8 }}>
+              <span style={{ fontSize: 20, fontWeight: 700, color: "var(--acid)" }}>$</span>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={bidAmount}
+                onChange={(e) => setBidAmount(e.target.value)}
+                style={{ fontFamily: "var(--data)", fontSize: 20, fontWeight: 700, flex: 1 }}
+              />
+            </div>
+          </label>
+          <input
+            type="text"
+            placeholder="Note (optional)"
+            value={bidNote}
+            onChange={(e) => setBidNote(e.target.value)}
+            className="request-card__note-input"
+          />
+          <div className="request-card__bid-actions">
+            <button type="button" className="btn btn--ghost btn--sm" onClick={() => setShowBid(false)}>
+              Cancel
+            </button>
+            <button type="button" className="btn btn--primary" disabled={busy} onClick={() => void submitBid()}>
+              {busy ? <span className="spinner" /> : <><Icon name="send" size={15} /> Send offer</>}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Request queue ───────────────────────────────────────────────────── */
+
+export function RequestQueue({
+  requests,
+  onAccept,
+  onDecline,
+  onBid,
   online,
   summary,
 }: {
-  jobs: Order[];
+  requests: Order[];
   onAccept: (o: Order) => void;
   onDecline: (o: Order) => void;
+  onBid: (o: Order, amount: number, note: string) => void;
   online: boolean;
   summary: SupplierSummary | null;
 }) {
@@ -125,12 +217,12 @@ export function JobQueue({
     return (
       <div className="card">
         <div className="card__head">
-          <h3>Live request queue</h3>
+          <h3>Incoming requests</h3>
         </div>
         <EmptyState
           icon="route"
           title="You are offline"
-          body="Flip the switch in the sidebar to start receiving jobs."
+          body="Go online to start receiving requests from customers."
         />
       </div>
     );
@@ -139,81 +231,32 @@ export function JobQueue({
   return (
     <div className="card" style={{ maxHeight: 520, overflowY: "auto" }}>
       <div className="card__head">
-        <h3>Live request queue</h3>
-        <span className="badge">{jobs.length}</span>
+        <h3>Incoming requests</h3>
+        <span className="badge">{requests.length}</span>
       </div>
 
-      <p className="small muted queue-staff" style={{ padding: "0 2px 8px" }}>
-        <Icon name="truck" size={13} />
-        {summary?.staff_on_shift ?? 0} on shift · {summary?.staff_available ?? 0} ready to dispatch
-      </p>
+      {summary && (
+        <p className="small muted" style={{ padding: "0 2px 8px" }}>
+          <Icon name="truck" size={13} />
+          {summary.staff_on_shift ?? 0} on shift · {summary.staff_available ?? 0} ready
+        </p>
+      )}
 
-      {jobs.length === 0 ? (
+      {requests.length === 0 ? (
         <EmptyState
           icon="clock"
-          title="Nothing waiting"
-          body="Stay online and the next paid request in your radius will land here."
+          title="No pending requests"
+          body="Stay online — customer requests will appear here."
         />
       ) : (
-        jobs.map((job) => (
-          <div key={job.id} className="job">
-            <div className="between">
-              <div className="job__kind">
-                <span className="job__kind-icon">
-                  <Icon name={serviceIcon(job.service_type)} size={16} />
-                </span>
-                {serviceLabel(job.service_type)}
-              </div>
-              <span className="data" style={{ fontSize: 16, fontWeight: 600, color: "var(--accent-text)" }}>
-                ${job.total_amount.toFixed(2)}
-              </span>
-            </div>
-            <div className="small">
-              <strong>{job.customer.full_name}</strong>
-              <span className="muted"> · {job.distance_km.toFixed(1)} km</span>
-            </div>
-            <p className="small muted">
-              {job.service_type === "fuel"
-                ? `${job.quantity_litres.toFixed(0)} L ${job.fuel_type} · `
-                : ""}
-              {job.pickup_address ?? "Pin revealed once you accept"}
-            </p>
-            {job.notes && <p className="small">“{job.notes}”</p>}
-            {job.offer_expires_at && (
-              <div className="between">
-                <span className="small muted">Offer expires</span>
-                <OfferCountdown expiresAt={job.offer_expires_at} />
-              </div>
-            )}
-            <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-              <span className="chip chip--static">
-                You keep ${(job.delivery_fee + job.service_fee).toFixed(2)}
-              </span>
-              {job.payment_status === "paid" && (
-                <span className="chip chip--static chip--ok">
-                  <Icon name="shield" size={12} />
-                  Prepaid
-                </span>
-              )}
-            </div>
-            <div className="job__actions">
-              <button
-                type="button"
-                className="btn btn--primary"
-                onClick={() => onAccept(job)}
-              >
-                <Icon name="check" size={15} />
-                Accept
-              </button>
-              <button
-                type="button"
-                className="btn btn--decline"
-                onClick={() => onDecline(job)}
-              >
-                Decline
-              </button>
-            </div>
-          </div>
+        requests.map((job) => (
+          <RequestCard
+            key={job.id}
+            job={job}
+            onAccept={onAccept}
+            onDecline={onDecline}
+            onBid={onBid}
+          />
         ))
       )}
     </div>
@@ -234,32 +277,27 @@ export function ComplianceCard({ summary }: { summary: SupplierSummary | null })
   return (
     <div className="card">
       <div className="card__head">
-        <h3>Fuel pricing compliance</h3>
+        <h3>ZERA compliance</h3>
         <span className="badge badge--ok">
-          <Icon name="check" size={11} />
-          ZERA
+          <Icon name="check" size={11} /> Verified
         </span>
       </div>
       {rows.map((row) => (
         <div key={row.fuel} style={{ marginBottom: 10 }}>
           <div className="compliance__price">
-            <span className="muted">{row.fuel} · ZERA cap</span>
+            <span className="muted">{row.fuel} cap</span>
             <span className="data">${row.cap != null ? row.cap.toFixed(2) : "…"}/L</span>
           </div>
           <div className="compliance__price">
-            <span className="muted">{row.fuel} · your price</span>
+            <span className="muted">{row.fuel} your price</span>
             <span className="data">${row.price != null ? row.price.toFixed(2) : "…"}/L</span>
           </div>
         </div>
       ))}
-      <div className="compliance__ok" style={{ marginTop: 8 }}>
-        <Icon name="shield" size={16} />
-        Compliant today
-      </div>
       {verifiedAt && (
         <p className="small muted" style={{ marginTop: 4 }}>
           Verified {verifiedAt}
-          {summary?.price_is_live ? " · live price" : " · offline snapshot"}
+          {summary?.price_is_live ? " · live" : " · cached"}
         </p>
       )}
     </div>
@@ -280,8 +318,7 @@ export function StockCard({ summary }: { summary: SupplierSummary | null }) {
       <div className="card__head">
         <h3>Fuel stock</h3>
         <span className="badge">
-          <Icon name="box" size={12} />
-          {cap.toLocaleString()} L tanker
+          <Icon name="box" size={12} /> {cap.toLocaleString()} L
         </span>
       </div>
       {rows.map((row) => {
@@ -294,18 +331,14 @@ export function StockCard({ summary }: { summary: SupplierSummary | null }) {
               <span className="data">{row.litres.toLocaleString()} L</span>
             </div>
             <div className="stock__bar">
-              <div
-                className={`stock__fill stock__fill--${tone}`}
-                style={{ width: `${Math.min(100, pct)}%` }}
-              />
+              <div className={`stock__fill stock__fill--${tone}`} style={{ width: `${Math.min(100, pct)}%` }} />
             </div>
-            <p className="small muted">{pct.toFixed(0)}% of the tanker</p>
           </div>
         );
       })}
-      <p className="small muted stock__meta">
+      <p className="small muted" style={{ marginTop: 6 }}>
         <Icon name="box" size={12} />
-        {summary?.containers_ready ?? 0} sealed containers ready · {summary?.containers_in_use ?? 0} in use
+        {summary?.containers_ready ?? 0} sealed ready · {summary?.containers_in_use ?? 0} in use
       </p>
     </div>
   );
@@ -317,10 +350,7 @@ export function SealContainers() {
   const [items, setItems] = useState<SealedContainer[] | null>(null);
 
   useEffect(() => {
-    api
-      .supplierContainers()
-      .then((res) => setItems(res.containers))
-      .catch(() => setItems([]));
+    api.supplierContainers().then((res) => setItems(res.containers)).catch(() => setItems([]));
   }, []);
 
   const ready = items ? items.filter((c) => c.status !== "in_use").length : 0;
@@ -332,13 +362,9 @@ export function SealContainers() {
         <span className="badge">{items ? `${ready} ready` : "…"}</span>
       </div>
       {!items ? (
-        <Loader label="Loading containers" />
+        <Loader label="Loading" />
       ) : items.length === 0 ? (
-        <EmptyState
-          icon="box"
-          title="No containers"
-          body="A sealed container is issued and scanned on every fuel handover."
-        />
+        <EmptyState icon="box" title="No containers" body="Containers are scanned at dispatch and handover." />
       ) : (
         items.map((c) => (
           <div key={c.serial} className="seal">
@@ -354,7 +380,7 @@ export function SealContainers() {
   );
 }
 
-/* ── Recent jobs table ───────────────────────────────────────────────── */
+/* ── Recent jobs ─────────────────────────────────────────────────────── */
 
 export function RecentJobs({ orders }: { orders: Order[] }) {
   const rows = orders.slice(0, 8);
@@ -371,11 +397,7 @@ export function RecentJobs({ orders }: { orders: Order[] }) {
       </div>
       {rows.length === 0 ? (
         <div style={{ padding: "4px 18px 18px" }}>
-          <EmptyState
-            icon="clock"
-            title="No jobs yet"
-            body="Accepted jobs show up here with status and earnings."
-          />
+          <EmptyState icon="clock" title="No jobs yet" body="Accepted jobs show up here." />
         </div>
       ) : (
         <div style={{ overflowX: "auto", padding: "8px 6px 6px" }}>
@@ -384,7 +406,6 @@ export function RecentJobs({ orders }: { orders: Order[] }) {
               <tr>
                 <th>Service</th>
                 <th>Customer</th>
-                <th>Location</th>
                 <th>Status</th>
                 <th>Earnings</th>
                 <th>Time</th>
@@ -399,8 +420,7 @@ export function RecentJobs({ orders }: { orders: Order[] }) {
                       {serviceLabel(o.service_type)}
                     </span>
                   </td>
-                  <td>{o.customer.full_name}</td>
-                  <td className="muted">{o.pickup_address ?? "—"}</td>
+                  <td>{o.customer?.full_name ?? "—"}</td>
                   <td>
                     <span className={`badge ${statusBadge(o.status)}`}>
                       {o.status.replace("_", " ")}
@@ -445,7 +465,7 @@ export function EarningsChart({ orders }: { orders: Order[] }) {
   return (
     <div className="card">
       <div className="card__head">
-        <h3>Earnings overview</h3>
+        <h3>Earnings</h3>
         <span className="badge">7 days</span>
       </div>
       <div className="bars">
@@ -485,9 +505,7 @@ export function ServicesSection({
   async function save(next: Record<string, boolean>) {
     setSaving(true);
     try {
-      const services = Object.entries(next)
-        .filter(([, on]) => on)
-        .map(([id]) => id);
+      const services = Object.entries(next).filter(([, on]) => on).map(([id]) => id);
       await api.updateSupplierProfile({ services_offered: services });
       onSaved?.();
     } catch {
@@ -513,9 +531,6 @@ export function ServicesSection({
           {saving ? "Saving…" : `${enabled} active`}
         </span>
       </div>
-      <p className="small muted" style={{ marginBottom: 8 }}>
-        Availability, callout fee and estimated response time for each service you run.
-      </p>
       {SERVICE_CATALOGUE.map((s) => (
         <div key={s.id} className="svc">
           <span className="svc__icon">
@@ -523,9 +538,7 @@ export function ServicesSection({
           </span>
           <div className="grow">
             <strong style={{ fontSize: 13.5 }}>{s.label}</strong>
-            <p className="small muted">
-              ${s.fee.toFixed(2)} callout · ~20 min response · 20 km radius
-            </p>
+            <p className="small muted">${s.fee.toFixed(2)} callout</p>
           </div>
           <button
             type="button"
@@ -540,10 +553,4 @@ export function ServicesSection({
       ))}
     </div>
   );
-}
-
-/* ── Service catalogue ────────────────────────────────────────────────── */
-
-export function serviceCatalogue(): { id: ServiceType; label: string; icon: IconName; fee: number }[] {
-  return SERVICE_CATALOGUE;
 }

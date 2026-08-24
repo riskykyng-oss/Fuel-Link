@@ -169,7 +169,8 @@ type IconName =
   | "route"
   | "home"
   | "info"
-  | "triangle";
+  | "triangle"
+  | "send";
 
 const PATHS: Record<IconName, string> = {
   nozzle: "M4 20h9V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1zM13 9h3a2 2 0 0 1 2 2v6a1.5 1.5 0 0 0 3 0V9l-2-3",
@@ -209,6 +210,7 @@ const PATHS: Record<IconName, string> = {
   home: "M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z",
   info: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18m0 8v6m0-10h.01",
   triangle: "M12 4 20 19H4zM12 10v4m0 3h.01",
+  send: "M22 2L11 13M22 2l-7 20-4-9-9-4z",
 };
 
 export function Icon({
