@@ -1,12 +1,17 @@
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 
-import { Icon, type IconName } from "./components/brand";
+import { Icon, Loader, type IconName } from "./components/brand";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { AuthScreen, FullPageLoader, Splash, WelcomeScreen } from "./screens/auth";
-import { CustomerHome, OrdersScreen, PricesScreen, VehiclesScreen } from "./screens/customer";
 import { SettingsScreen } from "./screens/settings";
-import { SupplierHome, SupplierJobs } from "./screens/supplier";
 import { useSession } from "./state";
+
+const CustomerHome = lazy(() => import("./screens/customer").then((m) => ({ default: m.CustomerHome })));
+const OrdersScreen = lazy(() => import("./screens/customer").then((m) => ({ default: m.OrdersScreen })));
+const VehiclesScreen = lazy(() => import("./screens/customer").then((m) => ({ default: m.VehiclesScreen })));
+const SupplierHome = lazy(() => import("./screens/supplier").then((m) => ({ default: m.SupplierHome })));
+const SupplierJobs = lazy(() => import("./screens/supplier").then((m) => ({ default: m.SupplierJobs })));
 
 type Tab = { to: string; label: string; icon: IconName };
 
@@ -34,29 +39,38 @@ function TabBar({ tabs }: { tabs: Tab[] }) {
   );
 }
 
+function RouteSpinner() {
+  return (
+    <div style={{ display: "grid", placeItems: "center", minHeight: "60vh" }}>
+      <Loader size={40} />
+    </div>
+  );
+}
+
 function AuthenticatedApp() {
   const { user } = useSession();
   const isSupplier = user?.role === "supplier";
 
   return (
     <div className={isSupplier ? "app app--dash" : "app"}>
-      <Routes>
-        {isSupplier ? (
-          <>
-            <Route path="/" element={<SupplierHome />} />
-            <Route path="/earnings" element={<SupplierJobs />} />
-          </>
-        ) : (
-          <>
-            <Route path="/" element={<CustomerHome />} />
-            <Route path="/prices" element={<PricesScreen />} />
-            <Route path="/orders" element={<OrdersScreen />} />
-            <Route path="/vehicles" element={<VehiclesScreen />} />
-          </>
-        )}
-        <Route path="/settings" element={<SettingsScreen />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <Suspense fallback={<RouteSpinner />}>
+        <Routes>
+          {isSupplier ? (
+            <>
+              <Route path="/" element={<SupplierHome />} />
+              <Route path="/earnings" element={<SupplierJobs />} />
+            </>
+          ) : (
+            <>
+              <Route path="/" element={<CustomerHome />} />
+              <Route path="/orders" element={<OrdersScreen />} />
+              <Route path="/vehicles" element={<VehiclesScreen />} />
+            </>
+          )}
+          <Route path="/settings" element={<SettingsScreen />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
       {!isSupplier && <TabBar tabs={CUSTOMER_TABS} />}
     </div>
   );
@@ -75,9 +89,11 @@ export default function App() {
   if (!ready) return <FullPageLoader label="Restoring your session" />;
 
   return (
-    <Routes>
-      <Route path="/auth" element={user ? <Navigate to="/" replace /> : <AuthScreen />} />
-      <Route path="/*" element={user ? <AuthenticatedApp /> : <WelcomeScreen />} />
-    </Routes>
+    <ErrorBoundary>
+      <Routes>
+        <Route path="/auth" element={user ? <Navigate to="/" replace /> : <AuthScreen />} />
+        <Route path="/*" element={user ? <AuthenticatedApp /> : <WelcomeScreen />} />
+      </Routes>
+    </ErrorBoundary>
   );
 }

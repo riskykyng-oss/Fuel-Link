@@ -3,8 +3,9 @@ import { NavLink } from "react-router-dom";
 
 import { Icon, Wordmark } from "../components/brand";
 import { PhotoPicker } from "../components/photo";
-import { Segmented, TopBar } from "../components/ui";
+import { Field, Segmented, TopBar } from "../components/ui";
 import { api } from "../lib/api";
+import { supabase } from "../lib/supabase";
 import { useSession, useTheme, useToast } from "../state";
 
 type Prefs = {
@@ -154,38 +155,7 @@ export function SettingsScreen() {
         </div>
 
         {profile && (
-          <div className="tile">
-            <p className="eyebrow">Your operation</p>
-            <p style={{ marginTop: 4 }}>{profile.company_name}</p>
-            <p className="small muted data">
-              {profile.zera_licence_number} · {profile.vehicle_registration} ·{" "}
-              {profile.tanker_capacity_litres} L
-            </p>
-            <p className="small" style={{ marginTop: 6 }}>
-              {profile.is_verified ? (
-                <span className="badge badge--ok">
-                  <Icon name="shield" size={11} />
-                  Licence verified
-                </span>
-              ) : (
-                <span className="badge badge--warn">Licence under review</span>
-              )}
-            </p>
-            {!profile.is_verified && (
-              <button
-                type="button"
-                className="btn btn--sm btn--primary"
-                style={{ marginTop: 8 }}
-                onClick={() => {
-                  api.requestVerification()
-                    .then(() => { refresh(); notify("Verification request submitted. We'll review your ZERA licence shortly."); })
-                    .catch(() => notify("Could not submit verification request.", "error"));
-                }}
-              >
-                <Icon name="shield" size={13} /> Request verification
-              </button>
-            )}
-          </div>
+          <SupplierProfileEditor profile={profile} onSaved={() => void refresh()} />
         )}
 
         {profile && (
@@ -217,6 +187,11 @@ export function SettingsScreen() {
             </p>
           </div>
         )}
+
+        <div className="tile">
+          <p className="eyebrow">Change password</p>
+          <PasswordChanger />
+        </div>
 
         <div className="field">
           <span>Appearance</span>
@@ -296,6 +271,140 @@ export function SettingsScreen() {
           <p className="eyebrow">Version 1.0.0 · Harare</p>
         </div>
       </div>
+    </div>
+  );
+}
+
+function SupplierProfileEditor({
+  profile,
+  onSaved,
+}: {
+  profile: { company_name: string; zera_licence_number: string; vehicle_registration: string; tanker_capacity_litres: number; is_verified: boolean; verification_status: string };
+  onSaved: () => void;
+}) {
+  const { notify } = useToast();
+  const [editing, setEditing] = useState(false);
+  const [company, setCompany] = useState(profile.company_name);
+  const [licence, setLicence] = useState(profile.zera_licence_number);
+  const [plate, setPlate] = useState(profile.vehicle_registration);
+  const [capacity, setCapacity] = useState(String(profile.tanker_capacity_litres));
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    setSaving(true);
+    try {
+      await api.updateSupplierProfile({
+        company_name: company.trim(),
+        zera_licence_number: licence.trim(),
+        vehicle_registration: plate.trim(),
+        tanker_capacity_litres: Number(capacity) || 200,
+      });
+      notify("Profile updated.");
+      setEditing(false);
+      onSaved();
+    } catch {
+      notify("Could not update profile.", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="tile">
+      <div className="between">
+        <p className="eyebrow">Your operation</p>
+        {!editing && (
+          <button type="button" className="btn btn--sm" onClick={() => setEditing(true)}>
+            <Icon name="tag" size={13} /> Edit
+          </button>
+        )}
+      </div>
+
+      {!editing ? (
+        <>
+          <p style={{ marginTop: 4 }}>{profile.company_name}</p>
+          <p className="small muted data">
+            {profile.zera_licence_number} · {profile.vehicle_registration} ·{" "}
+            {profile.tanker_capacity_litres} L
+          </p>
+          <p className="small" style={{ marginTop: 6 }}>
+            {profile.is_verified ? (
+              <span className="badge badge--ok">
+                <Icon name="shield" size={11} />
+                Licence verified
+              </span>
+            ) : (
+              <span className="badge badge--warn">Licence under review</span>
+            )}
+          </p>
+          {!profile.is_verified && (
+            <button
+              type="button"
+              className="btn btn--sm btn--primary"
+              style={{ marginTop: 8 }}
+              onClick={() => {
+                api.requestVerification()
+                  .then(() => { onSaved(); notify("Verification request submitted."); })
+                  .catch(() => notify("Could not submit verification request.", "error"));
+              }}
+            >
+              <Icon name="shield" size={13} /> Request verification
+            </button>
+          )}
+        </>
+      ) : (
+        <div className="stack" style={{ gap: 10, marginTop: 10 }}>
+          <Field label="Trading name" value={company} onChange={(e) => setCompany(e.target.value)} />
+          <div className="grid-2">
+            <Field label="ZERA licence no." value={licence} onChange={(e) => setLicence(e.target.value)} />
+            <Field label="Tanker plate" value={plate} onChange={(e) => setPlate(e.target.value)} />
+          </div>
+          <Field label="Tanker capacity (L)" type="number" value={capacity} onChange={(e) => setCapacity(e.target.value)} min={20} max={5000} />
+          <div className="row" style={{ gap: 8 }}>
+            <button type="button" className="btn btn--ghost btn--sm" onClick={() => { setEditing(false); setCompany(profile.company_name); setLicence(profile.zera_licence_number); setPlate(profile.vehicle_registration); setCapacity(String(profile.tanker_capacity_litres)); }}>
+              Cancel
+            </button>
+            <button type="button" className="btn btn--primary btn--sm" disabled={saving} onClick={() => void save()}>
+              {saving ? <span className="spinner" /> : "Save"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PasswordChanger() {
+  const { notify } = useToast();
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function change() {
+    if (newPw.length < 6) { notify("Password must be at least 6 characters.", "error"); return; }
+    if (newPw !== confirmPw) { notify("Passwords don't match.", "error"); return; }
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPw });
+      if (error) throw error;
+      notify("Password changed.");
+      setNewPw("");
+      setConfirmPw("");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Could not change password.";
+      notify(msg, "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="stack" style={{ gap: 10 }}>
+      <Field label="New password" type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="At least 6 characters" autoComplete="new-password" />
+      <Field label="Confirm password" type="password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} placeholder="Type again" autoComplete="new-password" />
+      <button type="button" className="btn btn--primary btn--block" disabled={busy || !newPw} onClick={() => void change()}>
+        {busy ? <span className="spinner" /> : "Change password"}
+      </button>
     </div>
   );
 }
