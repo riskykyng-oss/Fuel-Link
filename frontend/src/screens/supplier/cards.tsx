@@ -344,6 +344,93 @@ export function StockCard({ summary }: { summary: SupplierSummary | null }) {
   );
 }
 
+/* ── Stock editor ───────────────────────────────────────────────────── */
+
+export function StockEditor({ summary, onSaved }: { summary: SupplierSummary | null; onSaved?: () => void }) {
+  const { notify } = useToast();
+  const [petrol, setPetrol] = useState(String(summary?.fuel_stock_petrol ?? 0));
+  const [diesel, setDiesel] = useState(String(summary?.fuel_stock_diesel ?? 0));
+  const [capacity, setCapacity] = useState(String(summary?.tanker_capacity_litres ?? 200));
+  const [saving, setSaving] = useState(false);
+
+  const cap = parseFloat(capacity) || 0;
+  const petrolL = parseFloat(petrol) || 0;
+  const dieselL = parseFloat(diesel) || 0;
+  const total = petrolL + dieselL;
+  const overfilled = total > cap && cap > 0;
+
+  async function save() {
+    setSaving(true);
+    try {
+      await api.updateSupplierProfile({
+        fuel_stock_petrol: petrolL,
+        fuel_stock_diesel: dieselL,
+        tanker_capacity_litres: cap,
+      });
+      notify("Stock updated.");
+      onSaved?.();
+    } catch {
+      notify("Could not update stock.", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="card">
+      <div className="card__head">
+        <h3>Update stock</h3>
+        <span className={`badge${overfilled ? "" : " badge--ok"}`}>
+          {overfilled ? <><Icon name="siren" size={11} /> Over capacity</> : `${total.toLocaleString()} / ${cap.toLocaleString()} L`}
+        </span>
+      </div>
+      <div className="stack" style={{ gap: 12, padding: "4px 2px 8px" }}>
+        <label className="field" style={{ margin: 0 }}>
+          <span>Petrol (litres)</span>
+          <input
+            type="number"
+            min={0}
+            max={cap}
+            step={10}
+            value={petrol}
+            onChange={(e) => setPetrol(e.target.value)}
+          />
+        </label>
+        <label className="field" style={{ margin: 0 }}>
+          <span>Diesel (litres)</span>
+          <input
+            type="number"
+            min={0}
+            max={cap}
+            step={10}
+            value={diesel}
+            onChange={(e) => setDiesel(e.target.value)}
+          />
+        </label>
+        <label className="field" style={{ margin: 0 }}>
+          <span>Tanker capacity (litres)</span>
+          <input
+            type="number"
+            min={20}
+            max={5000}
+            step={10}
+            value={capacity}
+            onChange={(e) => setCapacity(e.target.value)}
+          />
+        </label>
+        <button
+          type="button"
+          className="btn btn--primary btn--block"
+          disabled={saving || overfilled}
+          onClick={() => void save()}
+        >
+          {saving ? <span className="spinner" /> : <><Icon name="check" size={15} /> Save stock</>}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ── Sealed container fleet ──────────────────────────────────────────── */
 
 export function SealContainers() {

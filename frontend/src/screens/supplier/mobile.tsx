@@ -15,6 +15,7 @@ import {
   SealContainers,
   ServicesSection,
   StockCard,
+  StockEditor,
 } from "./cards";
 
 function MobileAvailability({ store }: { store: SupplierStore }) {
@@ -82,6 +83,7 @@ function StockTab({ store }: { store: SupplierStore }) {
   return (
     <div className="pad stack mobile-stack">
       <StockCard summary={store.summary} />
+      <StockEditor summary={store.summary} onSaved={() => void store.load()} />
       <ComplianceCard summary={store.summary} />
       <SealContainers />
     </div>

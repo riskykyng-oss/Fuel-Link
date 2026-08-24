@@ -19,6 +19,7 @@ import {
   SealContainers,
   ServicesSection,
   StockCard,
+  StockEditor,
 } from "./cards";
 
 const SECTION_TITLES: Record<string, { title: string; sub: string }> = {
@@ -113,9 +114,12 @@ function SupplierDesktop({ store }: { store: SupplierStore }) {
             <SectionHead section="stock" />
             <div className="grid-2">
               <StockCard summary={summary} />
-              <ComplianceCard summary={summary} />
+              <StockEditor summary={summary} onSaved={() => void refresh()} />
             </div>
-            <SealContainers />
+            <div className="grid-2">
+              <ComplianceCard summary={summary} />
+              <SealContainers />
+            </div>
           </div>
         )}
       </main>
