@@ -13,6 +13,7 @@ import {
   LiveMap,
   RecentJobs,
   SealContainers,
+  ServicesSection,
   StockCard,
 } from "./cards";
 
@@ -77,12 +78,22 @@ function TeamTab() {
   );
 }
 
-function StockTab() {
+function StockTab({ store }: { store: SupplierStore }) {
   return (
     <div className="pad stack mobile-stack">
-      <StockCard summary={null} />
-      <ComplianceCard summary={null} />
+      <StockCard summary={store.summary} />
+      <ComplianceCard summary={store.summary} />
       <SealContainers />
+    </div>
+  );
+}
+
+function ServicesTab() {
+  const { user, refresh } = useSession();
+  const profile = user?.supplier_profile ?? null;
+  return (
+    <div className="pad stack mobile-stack">
+      <ServicesSection servicesOffered={profile?.services_offered} onSaved={() => void refresh()} />
     </div>
   );
 }
@@ -90,13 +101,14 @@ function StockTab() {
 export function SupplierMobile({ store }: { store: SupplierStore }) {
   const { user } = useSession();
   const profile = user?.supplier_profile ?? null;
-  const [tab, setTab] = useState<"requests" | "active" | "team" | "stock">("requests");
+  const [tab, setTab] = useState<"requests" | "active" | "team" | "stock" | "services">("requests");
 
-  const tabs: { id: string; label: string; icon: "route" | "clock" | "users" | "grid" | "box" | "gear"; link?: string }[] = [
+  const tabs: { id: string; label: string; icon: "route" | "clock" | "users" | "grid" | "box" | "gear" | "wrench"; link?: string }[] = [
     { id: "requests", label: "Requests", icon: "route" },
     { id: "active", label: "Active", icon: "clock" },
     { id: "team", label: "Team", icon: "users" },
     { id: "stock", label: "Stock", icon: "box" },
+    { id: "services", label: "Services", icon: "wrench" },
     { id: "settings-link", label: "Settings", icon: "gear", link: "/settings" },
   ];
 
@@ -116,7 +128,8 @@ export function SupplierMobile({ store }: { store: SupplierStore }) {
         {tab === "requests" && <RequestsTab store={store} />}
         {tab === "active" && <ActiveTab store={store} />}
         {tab === "team" && <TeamTab />}
-        {tab === "stock" && <StockTab />}
+        {tab === "stock" && <StockTab store={store} />}
+        {tab === "services" && <ServicesTab />}
       </main>
 
       <nav className="m-tabs">
@@ -131,7 +144,7 @@ export function SupplierMobile({ store }: { store: SupplierStore }) {
               key={t.id}
               type="button"
               className={tab === t.id ? "is-active" : undefined}
-              onClick={() => setTab(t.id as "requests" | "active" | "team" | "stock")}
+              onClick={() => setTab(t.id as "requests" | "active" | "team" | "stock" | "services")}
             >
               <Icon name={t.icon} size={21} />
               {t.label}
