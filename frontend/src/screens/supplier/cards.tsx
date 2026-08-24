@@ -5,6 +5,7 @@ import { MapView, type MapMarker } from "../../components/map";
 import { EmptyState } from "../../components/ui";
 import {
   api,
+  ApiError,
   type Order,
   type SealedContainer,
   type SupplierSummary,
@@ -434,13 +435,50 @@ export function StockEditor({ summary, onSaved }: { summary: SupplierSummary | n
 /* ── Sealed container fleet ──────────────────────────────────────────── */
 
 export function SealContainers() {
+  const { notify } = useToast();
   const [items, setItems] = useState<SealedContainer[] | null>(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [serial, setSerial] = useState("");
+  const [capacity, setCapacity] = useState("20");
+  const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
+  function load() {
     api.supplierContainers().then((res) => setItems(res.containers)).catch(() => setItems([]));
-  }, []);
+  }
+
+  useEffect(() => { load(); }, []);
 
   const ready = items ? items.filter((c) => c.status !== "in_use").length : 0;
+
+  async function add() {
+    const s = serial.trim().toUpperCase();
+    const cap = parseFloat(capacity) || 20;
+    if (!s) return;
+    setBusy(true);
+    try {
+      await api.addContainer(s, cap);
+      setSerial("");
+      setCapacity("20");
+      setShowAdd(false);
+      load();
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : "Could not add container.", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(s: string) {
+    setBusy(true);
+    try {
+      await api.deleteContainer(s);
+      load();
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : "Could not delete container.", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <div className="card">
@@ -450,18 +488,77 @@ export function SealContainers() {
       </div>
       {!items ? (
         <Loader label="Loading" />
-      ) : items.length === 0 ? (
-        <EmptyState icon="box" title="No containers" body="Containers are scanned at dispatch and handover." />
       ) : (
-        items.map((c) => (
-          <div key={c.serial} className="seal">
-            <span className="seal__serial">{c.serial}</span>
-            <span className="small muted">{c.capacity_litres} L</span>
-            <span className={`badge ${c.status === "in_use" ? "badge--lime" : "badge--ok"}`}>
-              {c.status.replace("_", " ")}
-            </span>
-          </div>
-        ))
+        <>
+          {items.map((c) => (
+            <div key={c.serial} className="seal">
+              <span className="seal__serial">{c.serial}</span>
+              <span className="small muted">{c.capacity_litres} L</span>
+              <span className={`badge ${c.status === "in_use" ? "badge--lime" : "badge--ok"}`}>
+                {c.status.replace("_", " ")}
+              </span>
+              {c.status === "available" && (
+                <button
+                  type="button"
+                  className="btn btn--sm btn--decline"
+                  disabled={busy}
+                  onClick={() => void remove(c.serial)}
+                >
+                  <Icon name="siren" size={13} /> Remove
+                </button>
+              )}
+            </div>
+          ))}
+
+          {showAdd ? (
+            <div style={{ padding: "10px 2px 4px", borderTop: "1px solid var(--border)", marginTop: 6 }}>
+              <div className="grid-2" style={{ gap: 8 }}>
+                <label className="field" style={{ margin: 0 }}>
+                  <span>Serial number</span>
+                  <input
+                    type="text"
+                    placeholder="SC-ZRD-003"
+                    value={serial}
+                    onChange={(e) => setSerial(e.target.value)}
+                    autoFocus
+                  />
+                </label>
+                <label className="field" style={{ margin: 0 }}>
+                  <span>Capacity (L)</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={5000}
+                    value={capacity}
+                    onChange={(e) => setCapacity(e.target.value)}
+                  />
+                </label>
+              </div>
+              <div className="row" style={{ gap: 8, marginTop: 8 }}>
+                <button type="button" className="btn btn--ghost btn--sm" onClick={() => setShowAdd(false)}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--primary btn--sm"
+                  disabled={busy || !serial.trim()}
+                  onClick={() => void add()}
+                >
+                  {busy ? <span className="spinner" /> : <><Icon name="plus" size={14} /> Add container</>}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="btn btn--ghost btn--block"
+              style={{ marginTop: 8 }}
+              onClick={() => setShowAdd(true)}
+            >
+              <Icon name="plus" size={14} /> Add container
+            </button>
+          )}
+        </>
       )}
     </div>
   );

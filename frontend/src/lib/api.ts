@@ -857,6 +857,31 @@ export const api = {
     return { containers: (data || []) as SealedContainer[] };
   },
 
+  addContainer: async (serial: string, capacityLitres: number): Promise<void> => {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) throw new ApiError("Not authenticated", 401);
+    const { data: profile } = await supabase.from("users").select("id").eq("auth_id", authUser.id).single();
+    if (!profile) throw new ApiError("Profile not found", 404);
+    const { error } = await supabase.from("sealed_containers").insert({
+      provider_id: profile.id,
+      serial,
+      capacity_litres: capacityLitres,
+      status: "available",
+    });
+    if (error) throw new ApiError(error.message, 400);
+  },
+
+  deleteContainer: async (serial: string): Promise<void> => {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) throw new ApiError("Not authenticated", 401);
+    const { data: profile } = await supabase.from("users").select("id").eq("auth_id", authUser.id).single();
+    if (!profile) throw new ApiError("Profile not found", 404);
+    const { error } = await supabase.from("sealed_containers").delete()
+      .eq("provider_id", profile.id)
+      .eq("serial", serial);
+    if (error) throw new ApiError(error.message, 400);
+  },
+
   disputes: async (): Promise<Dispute[]> => {
     const { data } = await supabase.from("disputes").select("*, order:orders(reference)").order("created_at", { ascending: false });
     return (data || []).map((d) => ({ ...d, reference: d.order?.reference || null, messages: [] }));
