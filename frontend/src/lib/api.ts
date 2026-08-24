@@ -339,6 +339,10 @@ function normalizePhone(phone: string): string {
   return "+263" + raw.replace(/^0/, "");
 }
 
+function phoneToEmail(phone: string): string {
+  return `${normalizePhone(phone)}@fuellink.auth`;
+}
+
 async function getToken(): Promise<string | null> {
   const { data } = await supabase.auth.getSession();
   return data.session?.access_token ?? null;
@@ -410,8 +414,8 @@ export const api = {
   health: () => request<{ status: string; payments_mode: string }>("/api/health").catch(() => ({ status: "ok", payments_mode: "mock" })),
 
   login: async (phone_number: string, password: string, role?: Role): Promise<AuthResponse> => {
-    const phone = normalizePhone(phone_number);
-    const { data, error } = await supabase.auth.signInWithPassword({ phone, password });
+    const email = phoneToEmail(phone_number);
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw new ApiError(error.message, 401);
 
     const user = await fetchUserProfile(data.user.id);
@@ -428,12 +432,13 @@ export const api = {
 
   registerCustomer: async (body: Record<string, unknown>): Promise<AuthResponse> => {
     const phone = normalizePhone(body.phone_number as string);
-    const { full_name, password, email } = body;
+    const email = phoneToEmail(body.phone_number as string);
+    const { full_name, password } = body;
 
     const { data, error } = await supabase.auth.signUp({
-      phone,
+      email,
       password: password as string,
-      options: { data: { full_name, role: "customer" } },
+      options: { data: { full_name, role: "customer", phone_number: phone } },
     });
     if (error) throw new ApiError(error.message, 400);
 
@@ -442,7 +447,7 @@ export const api = {
         auth_id: data.user.id,
         full_name,
         phone_number: phone,
-        email: email || null,
+        email: email,
         role: "customer",
         is_active: true,
         phone_verified: true,
@@ -468,7 +473,7 @@ export const api = {
         id: 0,
         full_name: full_name as string,
         phone_number: phone,
-        email: (email as string) || null,
+        email,
         role: "customer",
         theme: "dark",
         avatar_seed: "fuellink",
@@ -482,13 +487,14 @@ export const api = {
 
   registerSupplier: async (body: Record<string, unknown>): Promise<AuthResponse> => {
     const phone = normalizePhone(body.phone_number as string);
-    const { full_name, password, email, company_name, zera_licence_number,
+    const email = phoneToEmail(body.phone_number as string);
+    const { full_name, password, company_name, zera_licence_number,
       vehicle_registration, tanker_capacity_litres, services_offered } = body as Record<string, unknown>;
 
     const { data, error } = await supabase.auth.signUp({
-      phone,
+      email,
       password: password as string,
-      options: { data: { full_name, role: "supplier" } },
+      options: { data: { full_name, role: "supplier", phone_number: phone } },
     });
     if (error) throw new ApiError(error.message, 400);
 
@@ -497,7 +503,7 @@ export const api = {
         auth_id: data.user.id,
         full_name,
         phone_number: phone,
-        email: email || null,
+        email,
         role: "supplier",
         is_active: true,
         phone_verified: true,
@@ -540,7 +546,7 @@ export const api = {
         id: 0,
         full_name: full_name as string,
         phone_number: phone,
-        email: (email as string) || null,
+        email,
         role: "supplier",
         theme: "dark",
         avatar_seed: "fuellink",
@@ -565,15 +571,15 @@ export const api = {
     request<User>("/api/auth/supplier", { method: "PATCH", body: JSON.stringify(body) }),
 
   requestCode: async (phone_number: string, _purpose: "signup" | "reset"): Promise<CodeRequestResponse> => {
-    const phone = normalizePhone(phone_number);
-    const { error } = await supabase.auth.signInWithOtp({ phone });
+    const email = phoneToEmail(phone_number);
+    const { error } = await supabase.auth.signInWithOtp({ email });
     if (error) throw new ApiError(error.message, 400);
     return { message: "Code sent", lifetime_s: 300, resend_after_s: 60, dev_code: null };
   },
 
   verifyCode: async (phone_number: string, code: string, purpose: "signup" | "reset"): Promise<CodeVerifyResponse> => {
-    const phone = normalizePhone(phone_number);
-    const { data, error } = await supabase.auth.verifyOtp({ phone, token: code, type: "sms" });
+    const email = phoneToEmail(phone_number);
+    const { data, error } = await supabase.auth.verifyOtp({ email, token: code, type: "email" });
     if (error) throw new ApiError(error.message, 400);
     return { verified: true, purpose, reset_token: data.session?.access_token };
   },
