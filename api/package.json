@@ -1,11 +1,7 @@
 {
   "name": "fuellink-api",
   "private": true,
-  "type": "module",
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4"
-  },
-  "devDependencies": {
-    "@vercel/node": "^5.3.0"
   }
 }
