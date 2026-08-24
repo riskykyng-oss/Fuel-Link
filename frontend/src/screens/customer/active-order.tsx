@@ -22,6 +22,12 @@ export function ActiveOrder({ order, onCleared, onBack }: { order: Order; onClea
     current.payment_status === "created";
 
   useEffect(() => {
+    api.paymentStatus(order.id).then((p) => {
+      setCurrent((prev) => ({ ...prev, payment_status: p.status }));
+    }).catch(() => {});
+  }, [order.id]);
+
+  useEffect(() => {
     const stop = trackOrder(order.id, setFrame);
     return stop;
   }, [order.id]);
@@ -170,10 +176,10 @@ export function ActiveOrder({ order, onCleared, onBack }: { order: Order; onClea
                   {frame.provider_verified && <span className="badge badge--ok">Verified provider</span>}
                   <div className="row" style={{ gap: 6, marginTop: 7, flexWrap: "wrap" }}>
                     {frame.provider_staff_id && <span className="id-chip">Staff {frame.provider_staff_id}</span>}
-                    {current.sealed_container_id && (
+                    {current.seal_id && (
                       <span className="id-chip">
                         <Icon name="seal" size={12} />
-                        {current.sealed_container_id}
+                        {current.seal_id}
                       </span>
                     )}
                   </div>

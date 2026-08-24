@@ -189,8 +189,8 @@ export type Order = {
   eta_minutes: number;
   rating: number | null;
   handover_code: string | null;
-  provider_staff_id: string | null;
-  sealed_container_id: string | null;
+  staff_id: number | null;
+  seal_id: string | null;
   offer_expires_at: string | null;
   payout_status: string | null;
   provider_id: number | null;
@@ -258,7 +258,7 @@ export type TrackingFrame = {
   supplier_name: string | null;
   supplier_phone: string | null;
   provider_verified: boolean;
-  provider_staff_id: string | null;
+  provider_staff_id: number | null;
   handover_code: string | null;
 };
 
@@ -748,19 +748,25 @@ export const api = {
   orders: async (): Promise<Order[]> => {
     const { data: { user: authUser } } = await supabase.auth.getUser();
     if (!authUser) return [];
-    const { data: profile } = await supabase.from("users").select("id").eq("auth_id", authUser.id).single();
+    const { data: profile } = await supabase.from("users").select("id, role").eq("auth_id", authUser.id).single();
     if (!profile) return [];
-    const { data } = await supabase.from("orders").select(`*, customer:users!orders_customer_id_fkey(id, full_name, phone_number), supplier:users!orders_supplier_id_fkey(id, full_name, phone_number), station:stations(*)`).eq("customer_id", profile.id).order("created_at", { ascending: false });
+    const col = profile.role === "supplier" ? "supplier_id" : "customer_id";
+    const { data } = await supabase.from("orders").select(`*, customer:users!orders_customer_id_fkey(id, full_name, phone_number), supplier:users!orders_supplier_id_fkey(id, full_name, phone_number), station:stations(*)`).eq(col, profile.id).order("created_at", { ascending: false });
     return data || [];
   },
 
   activeOrder: async (): Promise<Order | null> => {
     const { data: { user: authUser } } = await supabase.auth.getUser();
     if (!authUser) return null;
-    const { data: profile } = await supabase.from("users").select("id").eq("auth_id", authUser.id).single();
+    const { data: profile } = await supabase.from("users").select("id, role").eq("auth_id", authUser.id).single();
     if (!profile) return null;
     const ACTIVE = ["pending", "bidding", "offered", "accepted", "in_transit", "arrived"];
-    const { data } = await supabase.from("orders").select(`*, customer:users!orders_customer_id_fkey(id, full_name, phone_number), supplier:users!orders_supplier_id_fkey(id, full_name, phone_number), station:stations(*)`).eq("customer_id", profile.id).in("status", ACTIVE).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    const col = profile.role === "supplier" ? "supplier_id" : "customer_id";
+    const { data } = await supabase.from("orders").select(`*, customer:users!orders_customer_id_fkey(id, full_name, phone_number), supplier:users!orders_supplier_id_fkey(id, full_name, phone_number), station:stations(*)`).eq(col, profile.id).in("status", ACTIVE).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (data) {
+      const { data: payment } = await supabase.from("payments").select("status").eq("order_id", data.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (payment) data.payment_status = payment.status;
+    }
     return data || null;
   },
 
@@ -1043,6 +1049,7 @@ export const api = {
       order_id: orderId, supplier_id: profile.id, proposed_amount, note: note || null,
     }).select().single();
     if (error) throw new ApiError(error.message, 400);
+    await supabase.from("orders").update({ status: "bidding", offered_supplier_id: profile.id }).eq("id", orderId).in("status", ["pending"]);
     return { ...data, supplier_name: null, supplier_company: null, supplier_verified: false, supplier_rating: null };
   },
 
@@ -1055,7 +1062,7 @@ export const api = {
   },
 
   pendingRequests: async (): Promise<Order[]> => {
-    const { data } = await supabase.from("orders").select(`*, customer:users!orders_customer_id_fkey(id, full_name, phone_number), supplier:users!orders_supplier_id_fkey(id, full_name, phone_number), station:stations(*)`).in("status", ["pending", "offered"]).order("created_at", { ascending: false });
+    const { data } = await supabase.from("orders").select(`*, customer:users!orders_customer_id_fkey(id, full_name, phone_number), supplier:users!orders_supplier_id_fkey(id, full_name, phone_number), station:stations(*)`).in("status", ["pending", "offered", "bidding"]).order("created_at", { ascending: false });
     return data || [];
   },
 };
@@ -1069,10 +1076,12 @@ export function trackOrder(orderId: number, onFrame: (frame: TrackingFrame) => v
     try {
       const { data } = await supabase
         .from("orders")
-        .select("id, reference, status, supplier_id, pickup_lat, pickup_lng, eta_minutes, handover_code, provider_staff_id")
+        .select("id, reference, status, supplier_id, pickup_lat, pickup_lng, eta_minutes, handover_code, staff_id")
         .eq("id", orderId)
         .single();
       if (!data) return;
+      const { data: payment } = await supabase
+        .from("payments").select("status").eq("order_id", orderId).order("created_at", { ascending: false }).limit(1).maybeSingle();
       const { data: supplierProfile } = await supabase
         .from("supplier_profiles").select("current_lat, current_lng, is_verified").eq("user_id", data.supplier_id || 0).maybeSingle();
       const { data: supplierUser } = data.supplier_id
@@ -1082,14 +1091,14 @@ export function trackOrder(orderId: number, onFrame: (frame: TrackingFrame) => v
         ? roadDistanceKm(supplierProfile.current_lat, supplierProfile.current_lng, data.pickup_lat, data.pickup_lng) : 0;
       onFrame({
         order_id: data.id, reference: data.reference, status: data.status as OrderStatus,
-        payment_status: null,
+        payment_status: payment?.status ?? null,
         supplier_lat: supplierProfile?.current_lat || null, supplier_lng: supplierProfile?.current_lng || null,
         pickup_lat: data.pickup_lat || 0, pickup_lng: data.pickup_lng || 0,
         remaining_km, eta_minutes: data.eta_minutes || 0,
         supplier_name: supplierUser?.full_name ?? null,
         supplier_phone: supplierUser?.phone_number ?? null,
         provider_verified: supplierProfile?.is_verified ?? false,
-        provider_staff_id: data.provider_staff_id, handover_code: data.handover_code,
+        provider_staff_id: data.staff_id, handover_code: data.handover_code,
       });
       if (data.status === "delivered" || data.status === "cancelled") {
         if (pollTimer) clearInterval(pollTimer);

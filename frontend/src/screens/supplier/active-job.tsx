@@ -193,16 +193,16 @@ export function ActiveJob({ store }: { store: SupplierStore }) {
               <Icon name="shield" size={13} />
               Prepaid by customer
             </span>
-            {order.sealed_container_id && (
+            {order.seal_id && (
               <span className="chip chip--static">
                 <Icon name="seal" size={13} />
-                Sealed {order.sealed_container_id}
+                Sealed {order.seal_id}
               </span>
             )}
-            {order.provider_staff_id && (
+            {order.staff_id && (
               <span className="chip chip--static">
                 <Icon name="id" size={13} />
-                Staff {order.provider_staff_id}
+                Staff {order.staff_id}
               </span>
             )}
           </div>
