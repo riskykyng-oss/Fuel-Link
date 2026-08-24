@@ -6,10 +6,10 @@ const serviceKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSI
 const supabase = createClient(supabaseUrl, serviceKey);
 
 const users = [
-  { phone: "0771234567", email: "+263771234567@fuellink.auth", name: "Tanaka Moyo", role: "customer" },
-  { phone: "0712345678", email: "+263712345678@fuellink.auth", name: "Farai Chikwanha", role: "supplier" },
-  { phone: "0786669991", email: "+263786669991@fuellink.auth", name: "Tendai Mutasa", role: "supplier" },
-  { phone: "0774000001", email: "+263774000001@fuellink.auth", name: "Bongani Ndlovu", role: "supplier" },
+  { phone: "0771234567", email: "263771234567@fuellink.auth", name: "Tanaka Moyo", role: "customer" },
+  { phone: "0712345678", email: "263712345678@fuellink.auth", name: "Farai Chikwanha", role: "supplier" },
+  { phone: "0786669991", email: "263786669991@fuellink.auth", name: "Tendai Mutasa", role: "supplier" },
+  { phone: "0774000001", email: "263774000001@fuellink.auth", name: "Bongani Ndlovu", role: "supplier" },
 ];
 
 async function main() {

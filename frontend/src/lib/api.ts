@@ -340,7 +340,8 @@ function normalizePhone(phone: string): string {
 }
 
 function phoneToEmail(phone: string): string {
-  return `${normalizePhone(phone)}@fuellink.auth`;
+  const digits = normalizePhone(phone).replace(/\D/g, "");
+  return `${digits}@fuellink.auth`;
 }
 
 async function getToken(): Promise<string | null> {
