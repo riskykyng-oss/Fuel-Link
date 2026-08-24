@@ -7,10 +7,6 @@ import { CustomerHome, OrdersScreen, PricesScreen, VehiclesScreen } from "./scre
 import { SettingsScreen } from "./screens/settings";
 import { SupplierHome, SupplierJobs } from "./screens/supplier";
 import { useSession } from "./state";
-import { MotoristAppScreen } from "./ui/screens/MotoristAppScreen";
-import { ProviderDashboardScreen } from "./ui/screens/ProviderDashboardScreen";
-import { GarageDashboardScreen } from "./ui/screens/GarageDashboardScreen";
-import { DriverAppScreen } from "./ui/screens/DriverAppScreen";
 
 type Tab = { to: string; label: string; icon: IconName };
 
@@ -80,11 +76,6 @@ export default function App() {
 
   return (
     <Routes>
-      {/* Design-library previews — reachable before login; a signed-in user is redirected into the app. */}
-      <Route path="/design" element={user ? <Navigate to="/" replace /> : <ProviderDashboardScreen />} />
-      <Route path="/motorist" element={user ? <Navigate to="/" replace /> : <MotoristAppScreen />} />
-      <Route path="/garage" element={user ? <Navigate to="/" replace /> : <GarageDashboardScreen />} />
-      <Route path="/driver" element={user ? <Navigate to="/" replace /> : <DriverAppScreen />} />
       <Route path="/auth" element={user ? <Navigate to="/" replace /> : <AuthScreen />} />
       <Route path="/*" element={user ? <AuthenticatedApp /> : <WelcomeScreen />} />
     </Routes>

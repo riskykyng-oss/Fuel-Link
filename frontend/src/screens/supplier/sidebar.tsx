@@ -82,30 +82,6 @@ export function Sidebar({
           Settings
         </NavLink>
 
-        {import.meta.env.DEV && (
-          <>
-            <div className="dash__dev">
-              <span className="small muted">Design previews</span>
-            </div>
-            <NavLink to="/design">
-              <Icon name="grid" size={18} />
-              Design
-            </NavLink>
-            <NavLink to="/motorist">
-              <Icon name="tow" size={18} />
-              Motorist
-            </NavLink>
-            <NavLink to="/garage">
-              <Icon name="wrench" size={18} />
-              Garage
-            </NavLink>
-            <NavLink to="/driver">
-              <Icon name="truck" size={18} />
-              Driver
-            </NavLink>
-          </>
-        )}
-
         <div className="dash__profile">
           <span className="avatar">{initials}</span>
           <div className="grow">

@@ -12,7 +12,7 @@ import type { Config } from "tailwindcss";
  * text-danger/success/warn/blue     → status ink
  */
 export default {
-  content: ["./src/ui/**/*.{ts,tsx}", "./src/design.tsx", "./design.html", "./index.html"],
+  content: ["./src/ui/**/*.{ts,tsx}", "./index.html"],
   theme: {
     extend: {
       colors: {
