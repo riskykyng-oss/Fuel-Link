@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
-import { Icon, Loader, Mark, Wordmark } from "../components/brand";
+import { Icon, Loader, Wordmark } from "../components/brand";
 import { Field, TopBar } from "../components/ui";
 import { AuthBackdrop } from "../components/backdrop";
 import { VerifyCodeCard } from "../components/verify";
@@ -203,35 +203,6 @@ export function WelcomeScreen() {
                 <Link to="/auth?mode=signup&role=supplier" className="btn btn--ghost btn--block">
                   I provide roadside help
                 </Link>
-              </div>
-
-              <div className="tile auth__demo">
-                <div className="row" style={{ gap: 10, marginBottom: 8 }}>
-                  <Mark size={20} className="acid" />
-                  <p className="eyebrow">Demo accounts</p>
-                </div>
-                <p className="small muted">
-                  Customer <span className="data acid">0771234567</span> · Supplier{" "}
-                  <span className="data acid">0712345678</span>
-                  <br />
-                  Password for both: <span className="data acid">password123</span>
-                </p>
-                {import.meta.env.DEV && (
-                  <div className="row" style={{ gap: 8, marginTop: 10 }}>
-                    <Link to="/motorist" className="chip">
-                      Preview · Motorist
-                    </Link>
-                    <Link to="/design" className="chip">
-                      Preview · Provider
-                    </Link>
-                    <Link to="/garage" className="chip">
-                      Preview · Garage
-                    </Link>
-                    <Link to="/driver" className="chip">
-                      Preview · Driver
-                    </Link>
-                  </div>
-                )}
               </div>
             </div>
           </div>

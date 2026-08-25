@@ -453,18 +453,23 @@ export const api = {
       throw new ApiError(msg, 400);
     }
 
-    if (data.session && data.user) {
-      const { error: insertError } = await supabase.from("users").insert({
-        auth_id: data.user.id,
-        full_name,
-        phone_number: phone,
-        email: email,
-        role: "customer",
-        is_active: true,
-        phone_verified: true,
-      });
-      if (insertError) throw new ApiError(insertError.message, 400);
+    if (!data.user) throw new ApiError("Signup failed. Please try again.", 400);
 
+    const { error: insertError } = await supabase.from("users").insert({
+      auth_id: data.user.id,
+      full_name,
+      phone_number: phone,
+      email,
+      role: "customer",
+      is_active: true,
+      phone_verified: true,
+    });
+    if (insertError) {
+      console.error("[signup] Profile insert error:", insertError.message);
+      throw new ApiError("Could not create profile: " + insertError.message, 400);
+    }
+
+    if (data.session) {
       const user = await fetchUserProfile(data.user.id);
       return {
         access_token: data.session.access_token,
@@ -525,37 +530,43 @@ export const api = {
       throw new ApiError(msg, 400);
     }
 
-    if (data.session && data.user) {
-      const { error: insertError } = await supabase.from("users").insert({
-        auth_id: data.user.id,
-        full_name,
-        phone_number: phone,
-        email,
-        role: "supplier",
-        is_active: true,
-        phone_verified: true,
+    if (!data.user) throw new ApiError("Signup failed. Please try again.", 400);
+
+    const { error: insertError } = await supabase.from("users").insert({
+      auth_id: data.user.id,
+      full_name,
+      phone_number: phone,
+      email,
+      role: "supplier",
+      is_active: true,
+      phone_verified: true,
+    });
+    if (insertError) {
+      console.error("[signup] Profile insert error:", insertError.message);
+      throw new ApiError("Could not create profile: " + insertError.message, 400);
+    }
+
+    const { data: profile } = await supabase
+      .from("users").select("id").eq("auth_id", data.user.id).single();
+
+    if (profile) {
+      const { error: spError } = await supabase.from("supplier_profiles").insert({
+        user_id: profile.id,
+        company_name: company_name || "My Company",
+        zera_licence_number: zera_licence_number || "",
+        vehicle_registration: vehicle_registration || "",
+        tanker_capacity_litres: tanker_capacity_litres || 200,
+        services_offered: Array.isArray(services_offered) ? services_offered.join(",") : (services_offered || "fuel"),
+        provider_type: "fuel_station",
+        callout_fee: 0,
+        labour_rate: 0,
+        is_verified: true,
+        verification_status: "verified",
       });
-      if (insertError) throw new ApiError(insertError.message, 400);
+      if (spError) console.error("[signup] Supplier profile error:", spError.message);
+    }
 
-      const { data: profile } = await supabase
-        .from("users").select("id").eq("auth_id", data.user.id).single();
-
-      if (profile) {
-        await supabase.from("supplier_profiles").insert({
-          user_id: profile.id,
-          company_name: company_name || "My Company",
-          zera_licence_number: zera_licence_number || "",
-          vehicle_registration: vehicle_registration || "",
-          tanker_capacity_litres: tanker_capacity_litres || 200,
-          services_offered: Array.isArray(services_offered) ? services_offered.join(",") : (services_offered || "fuel"),
-          provider_type: "fuel_station",
-          callout_fee: 0,
-          labour_rate: 0,
-          is_verified: true,
-          verification_status: "verified",
-        });
-      }
-
+    if (data.session) {
       const user = await fetchUserProfile(data.user.id);
       return {
         access_token: data.session.access_token,
