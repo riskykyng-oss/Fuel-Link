@@ -2982,6 +2982,60 @@ textarea {
   gap: 2px;
 }
 
+/* ── Customer desktop request layout ──────────────────────────────────── */
+@media (min-width: 821px) {
+  .cust-request--split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    height: 100%;
+  }
+
+  .cust-request--split .cust-request__map {
+    position: relative;
+    min-height: 100%;
+    overflow: hidden;
+    border-radius: 0;
+  }
+
+  .cust-request--split .cust-request__panel {
+    position: relative;
+    margin-top: 0;
+    overflow-y: auto;
+    border-left: 1px solid var(--border);
+    background: var(--surface-1);
+  }
+
+  .cust-request--split .cust-request__panel .sheet {
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+
+  .cust-request--split .cust-request__panel-inner {
+    padding: 32px;
+    max-width: 540px;
+    margin: 0 auto;
+  }
+
+  .cust-request--wide .cust-request__panel {
+    position: relative;
+    margin-top: 0;
+    background: var(--surface-1);
+    border-left: 1px solid var(--border);
+    overflow-y: auto;
+  }
+
+  .cust-request--wide .cust-request__panel-inner {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 32px;
+  }
+
+  .cust-request--wide .service-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
 @media (max-width: 820px) {
   .app--customer-desktop {
     grid-template-columns: 1fr;

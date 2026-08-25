@@ -33,6 +33,7 @@ import { useSession, useToast } from "../../state";
 import { ActiveOrder } from "./active-order";
 import { BiddingScreen } from "./bidding";
 import { useMyLocation } from "./shared";
+import { useMediaQuery, MOBILE_QUERY } from "../../lib/useMediaQuery";
 const DIRECT_SERVICES: ServiceType[] = [
   "fuel",
   "towing",
@@ -54,6 +55,7 @@ export function CustomerHome() {
   const { user, refresh } = useSession();
   const { notify } = useToast();
   const { position, precise, locate } = useMyLocation();
+  const isDesktop = useMediaQuery(MOBILE_QUERY) === false;
   const [pin, setPin] = useState<[number, number]>(position);
   const [manual, setManual] = useState(false);
   const [recenter, setRecenter] = useState("init");
@@ -289,8 +291,8 @@ export function CustomerHome() {
   }
   if (step === "quote") {
     return (
-      <div className="screen" style={{ position: "relative" }}>
-        <div style={{ position: "absolute", inset: 0 }}>
+      <div className={`screen${isDesktop ? " cust-request--split" : ""}`}>
+        <div className={isDesktop ? "cust-request__map" : ""} style={isDesktop ? undefined : { position: "absolute", inset: 0 }}>
           <MapView
             center={pin}
             markers={markers}
@@ -298,32 +300,32 @@ export function CustomerHome() {
             interactive={false}
           />
         </div>
-        <div style={{ position: "relative", marginTop: "auto", zIndex: 400 }}>
-          <Sheet>
-            <div className="stack">
-              {quote && !quote.coverage ? (
-                <NoCoverage quote={quote} onBack={() => setStep("details")} />
-              ) : (
-                quote && (
-                  <QuoteStep
-                    quote={quote}
-                    onConfirm={confirmRequest}
-                    onBack={() => setStep("details")}
-                  />
-                )
-              )}
-            </div>
-          </Sheet>
+        <div className={isDesktop ? "cust-request__panel" : ""} style={isDesktop ? undefined : { position: "relative", marginTop: "auto", zIndex: 400 }}>
+          <div className={isDesktop ? "cust-request__panel-inner" : ""}>
+            <Sheet>
+              <div className="stack">
+                {quote && !quote.coverage ? (
+                  <NoCoverage quote={quote} onBack={() => setStep("details")} />
+                ) : (
+                  quote && (
+                    <QuoteStep
+                      quote={quote}
+                      onConfirm={confirmRequest}
+                      onBack={() => setStep("details")}
+                    />
+                  )
+                )}
+              </div>
+            </Sheet>
+          </div>
         </div>
       </div>
     );
   }
   if (step === "details") {
     return (
-      <div className="screen" style={{ position: "relative" }}>
-        {" "}
-        <div style={{ position: "absolute", inset: 0 }}>
-          {" "}
+      <div className={`screen${isDesktop ? " cust-request--split" : ""}`}>
+        <div className={isDesktop ? "cust-request__map" : ""} style={isDesktop ? undefined : { position: "absolute", inset: 0 }}>
           <MapView
             center={pin}
             markers={markers}
@@ -332,221 +334,221 @@ export function CustomerHome() {
               setManual(true);
             }}
             recenterKey={recenter}
-          />{" "}
-        </div>{" "}
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            zIndex: 400,
-            padding: 12,
-          }}
-        >
-          {" "}
-          <div className="tile between" style={{ background: "var(--bg)" }}>
-            {" "}
-            <div>
-              {" "}
-              <p className="eyebrow">Drop your pin</p>{" "}
-              <p className="data muted">
-                {" "}
-                {pin[0].toFixed(4)}, {pin[1].toFixed(4)}{" "}
-              </p>{" "}
-            </div>{" "}
-            <button type="button" className="btn btn--sm" onClick={locate}>
-              {" "}
-              <Icon name="target" size={15} />{" "}
-              {precise ? "Recentre" : "Use GPS"}{" "}
-            </button>{" "}
-          </div>{" "}
-        </div>{" "}
-        <div style={{ position: "relative", marginTop: "auto", zIndex: 400 }}>
-          {" "}
-          <Sheet>
-            {" "}
-            <div className="stack">
-              {" "}
+          />
+        </div>
+        {!isDesktop && (
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              zIndex: 400,
+              padding: 12,
+            }}
+          >
+            <div className="tile between" style={{ background: "var(--bg)" }}>
+              <div>
+                <p className="eyebrow">Drop your pin</p>
+                <p className="data muted">
+                  {pin[0].toFixed(4)}, {pin[1].toFixed(4)}
+                </p>
+              </div>
+              <button type="button" className="btn btn--sm" onClick={locate}>
+                <Icon name="target" size={15} /> {precise ? "Recentre" : "Use GPS"}
+              </button>
+            </div>
+          </div>
+        )}
+        <div className={isDesktop ? "cust-request__panel" : ""} style={isDesktop ? undefined : { position: "relative", marginTop: "auto", zIndex: 400 }}>
+          {isDesktop && (
+            <div style={{ padding: "24px 32px 8px" }}>
               <div className="between">
-                {" "}
+                <h1>Where are you?</h1>
+                <button type="button" className="btn btn--sm" onClick={() => setStep("triage")}>
+                  <Icon name="back" size={15} /> Change
+                </button>
+              </div>
+              <div className="tile between" style={{ background: "var(--surface-2)", marginTop: 12 }}>
                 <div>
-                  <h1>Where are you?</h1>
+                  <p className="eyebrow">Drop your pin</p>
+                  <p className="data muted">{pin[0].toFixed(4)}, {pin[1].toFixed(4)}</p>
                 </div>
-                <button
-                  type="button"
-                  className="btn btn--sm"
-                  onClick={() => setStep("triage")}
-                >
-                  {" "}
-                  <Icon name="back" size={15} /> Change{" "}
-                </button>{" "}
-              </div>{" "}
-              {question && (
-                <div className="tile stack" style={{ gap: 8 }}>
-                  {" "}
-                  <p className="eyebrow">{question}</p>{" "}
-                  <div className="grid-2">
-                    {" "}
+                <button type="button" className="btn btn--sm" onClick={locate}>
+                  <Icon name="target" size={15} /> {precise ? "Recentre" : "Use GPS"}
+                </button>
+              </div>
+            </div>
+          )}
+          <div className={isDesktop ? "cust-request__panel-inner" : ""}>
+            <Sheet>
+              <div className="stack">
+                {!isDesktop && (
+                  <div className="between">
+                    <div>
+                      <h1>Where are you?</h1>
+                    </div>
                     <button
                       type="button"
-                      className="btn"
-                      aria-pressed={
-                        answer ===
-                        (question.includes("lights")
-                          ? "lights_yes"
-                          : "spare_yes")
-                      }
-                      onClick={() =>
-                        setAnswer(
-                          question.includes("lights")
-                            ? "lights_yes"
-                            : "spare_yes",
-                        )
-                      }
+                      className="btn btn--sm"
+                      onClick={() => setStep("triage")}
                     >
-                      {" "}
-                      Yes{" "}
-                    </button>{" "}
-                    <button
-                      type="button"
-                      className="btn"
-                      aria-pressed={
-                        answer ===
-                        (question.includes("lights") ? "lights_no" : "spare_no")
-                      }
-                      onClick={() =>
-                        setAnswer(
-                          question.includes("lights")
-                            ? "lights_no"
-                            : "spare_no",
-                        )
-                      }
-                    >
-                      {" "}
-                      No{" "}
-                    </button>{" "}
-                  </div>{" "}
-                  {answer === null && (
-                    <button
-                      type="button"
-                      className="small muted"
-                      style={{
-                        background: "none",
-                        border: 0,
-                        padding: 0,
-                        alignSelf: "flex-start",
-                      }}
-                      onClick={() => setAnswer("skip")}
-                    >
-                      {" "}
-                      Skip — I'm not sure, just help{" "}
+                      <Icon name="back" size={15} /> Change
                     </button>
-                  )}{" "}
-                </div>
-              )}{" "}
-              {vehicles.length > 0 && (
-                <>
-                  {" "}
-                  <p className="eyebrow">Your vehicle</p>{" "}
-                  <div className="scroller">
-                    {" "}
-                    {vehicles.map((v) => (
+                  </div>
+                )}
+                {question && (
+                  <div className="tile stack" style={{ gap: 8 }}>
+                    <p className="eyebrow">{question}</p>
+                    <div className="grid-2">
                       <button
-                        key={v.id}
                         type="button"
-                        className="chip"
-                        aria-pressed={vehicleId === v.id}
-                        onClick={() => setVehicleId(v.id)}
+                        className="btn"
+                        aria-pressed={
+                          answer ===
+                          (question.includes("lights")
+                            ? "lights_yes"
+                            : "spare_yes")
+                        }
+                        onClick={() =>
+                          setAnswer(
+                            question.includes("lights")
+                              ? "lights_yes"
+                              : "spare_yes",
+                          )
+                        }
                       >
-                        {" "}
-                        {v.make} {v.model} · {v.plate_number}{" "}
+                        Yes
                       </button>
-                    ))}{" "}
-                  </div>{" "}
-                </>
-              )}{" "}
-              {service === "fuel" && (
-                <>
-                  {" "}
-                  <Segmented
-                    value={fuelType}
-                    onChange={setFuelType}
-                    options={[
-                      { value: "petrol", label: "Petrol" },
-                      { value: "diesel", label: "Diesel" },
-                    ]}
-                  />{" "}
-                  <div className="field">
-                    {" "}
-                    <span>How much do you need?</span>{" "}
+                      <button
+                        type="button"
+                        className="btn"
+                        aria-pressed={
+                          answer ===
+                          (question.includes("lights") ? "lights_no" : "spare_no")
+                        }
+                        onClick={() =>
+                          setAnswer(
+                            question.includes("lights")
+                              ? "lights_no"
+                              : "spare_no",
+                          )
+                        }
+                      >
+                        No
+                      </button>
+                    </div>
+                    {answer === null && (
+                      <button
+                        type="button"
+                        className="small muted"
+                        style={{
+                          background: "none",
+                          border: 0,
+                          padding: 0,
+                          alignSelf: "flex-start",
+                        }}
+                        onClick={() => setAnswer("skip")}
+                      >
+                        Skip — I'm not sure, just help
+                      </button>
+                    )}
+                  </div>
+                )}
+                {vehicles.length > 0 && (
+                  <>
+                    <p className="eyebrow">Your vehicle</p>
                     <div className="scroller">
-                      {" "}
-                      {LITRE_PRESETS.map((amount) => (
+                      {vehicles.map((v) => (
                         <button
-                          key={amount}
+                          key={v.id}
                           type="button"
                           className="chip"
-                          aria-pressed={litres === amount}
-                          onClick={() => setLitres(amount)}
+                          aria-pressed={vehicleId === v.id}
+                          onClick={() => setVehicleId(v.id)}
                         >
-                          {" "}
-                          {amount} L{" "}
+                          {v.make} {v.model} · {v.plate_number}
                         </button>
-                      ))}{" "}
-                    </div>{" "}
-                    <p className="small muted">
-                      Deliveries are capped at 20 L per request.
-                    </p>{" "}
-                  </div>{" "}
-                </>
-              )}{" "}
-              <Field
-                label="Address or landmark (optional)"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder={`Near ${chosenVehicle ? chosenVehicle.make : "your car"}… or 'corner 4th & Nelson Mandela'`}
-              />{" "}
-              <Field
-                label="Note for the provider (optional)"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder={`${chosenVehicle ? `${chosenVehicle.make} ${chosenVehicle.model}, hazards on` : "Silver car, hazards on"}`}
-              />{" "}
-              <PhotoPicker
-                kind="breakdown"
-                onUploaded={setPhotoUrl}
-                label="Attach a photo of the issue"
-              />{" "}
-              <button
-                type="button"
-                className="btn btn--primary btn--block"
-                disabled={quoting || (question !== null && answer === null)}
-                onClick={requestQuote}
-              >
-                {" "}
-                {quoting ? (
-                  <span className="spinner" />
-                ) : (
-                  "Find providers & price"
-                )}{" "}
-              </button>{" "}
-              <a className="panic-link" href={`tel:${EMERGENCY_LINE}`}>
-                {" "}
-                <Icon name="triangle" size={14} /> I feel unsafe — call the
-                emergency line{" "}
-              </a>{" "}
-            </div>{" "}
-          </Sheet>{" "}
-        </div>{" "}
+                      ))}
+                    </div>
+                  </>
+                )}
+                {service === "fuel" && (
+                  <>
+                    <Segmented
+                      value={fuelType}
+                      onChange={setFuelType}
+                      options={[
+                        { value: "petrol", label: "Petrol" },
+                        { value: "diesel", label: "Diesel" },
+                      ]}
+                    />
+                    <div className="field">
+                      <span>How much do you need?</span>
+                      <div className="scroller">
+                        {LITRE_PRESETS.map((amount) => (
+                          <button
+                            key={amount}
+                            type="button"
+                            className="chip"
+                            aria-pressed={litres === amount}
+                            onClick={() => setLitres(amount)}
+                          >
+                            {amount} L
+                          </button>
+                        ))}
+                      </div>
+                      <p className="small muted">
+                        Deliveries are capped at 20 L per request.
+                      </p>
+                    </div>
+                  </>
+                )}
+                <Field
+                  label="Address or landmark (optional)"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder={`Near ${chosenVehicle ? chosenVehicle.make : "your car"}… or 'corner 4th & Nelson Mandela'`}
+                />
+                <Field
+                  label="Note for the provider (optional)"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder={`${chosenVehicle ? `${chosenVehicle.make} ${chosenVehicle.model}, hazards on` : "Silver car, hazards on"}`}
+                />
+                <PhotoPicker
+                  kind="breakdown"
+                  onUploaded={setPhotoUrl}
+                  label="Attach a photo of the issue"
+                />
+                <button
+                  type="button"
+                  className="btn btn--primary btn--block"
+                  disabled={quoting || (question !== null && answer === null)}
+                  onClick={requestQuote}
+                >
+                  {quoting ? (
+                    <span className="spinner" />
+                  ) : (
+                    "Find providers & price"
+                  )}
+                </button>
+                <a className="panic-link" href={`tel:${EMERGENCY_LINE}`}>
+                  <Icon name="triangle" size={14} /> I feel unsafe — call the
+                  emergency line
+                </a>
+              </div>
+            </Sheet>
+          </div>
+        </div>
       </div>
     );
   }
   return (
-    <div className="screen">
+    <div className={`screen${isDesktop ? " cust-request--wide" : ""}`}>
       <div
         className="pad stack"
-        style={{ maxWidth: 560, margin: "0 auto", width: "100%" }}
+        style={isDesktop ? { width: "100%" } : { maxWidth: 560, margin: "0 auto", width: "100%" }}
       >
         <div className="pin-row between">
           <div>
