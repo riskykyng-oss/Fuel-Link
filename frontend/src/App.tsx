@@ -45,7 +45,7 @@ function CustomerSidebar() {
   const navigate = useNavigate();
 
   const NAV_ITEMS: { to: string; label: string; icon: IconName }[] = [
-    { to: "/", label: "Request fuel", icon: "map" },
+    { to: "/", label: "Request Fuel", icon: "map" },
     { to: "/orders", label: "My orders", icon: "wallet" },
     { to: "/vehicles", label: "My vehicles", icon: "truck" },
     { to: "/settings", label: "Profile & settings", icon: "gear" },
