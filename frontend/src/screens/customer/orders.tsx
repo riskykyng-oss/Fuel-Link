@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { Icon, Loader } from "../../components/brand";
 import { EmptyState, Segmented, TopBar } from "../../components/ui";
@@ -9,6 +10,7 @@ export function OrdersScreen() {
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [methods, setMethods] = useState<PaymentMethod[]>([]);
   const [tab, setTab] = useState<"active" | "completed" | "cancelled">("active");
+  const navigate = useNavigate();
 
   useEffect(() => {
     api.paymentMethods().then(setMethods).catch(() => setMethods([]));
@@ -27,7 +29,7 @@ export function OrdersScreen() {
 
   return (
     <div className="screen">
-      <TopBar title="Orders" />
+      <TopBar title="Orders" onBack={() => navigate(-1)} />
       <div className="pad stack">
         <div>
           <p className="eyebrow" style={{ marginBottom: 8 }}>

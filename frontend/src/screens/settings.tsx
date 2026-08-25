@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 
 import { Icon, Wordmark } from "../components/brand";
 import { PhotoPicker } from "../components/photo";
@@ -83,6 +83,7 @@ export function SettingsScreen() {
   const isSupplier = user?.role === "supplier";
   const profile = user?.supplier_profile;
   const vehicle = user?.vehicles?.[0];
+  const navigate = useNavigate();
 
   return (
     <div className={isSupplier ? "screen" : "screen"}>
@@ -101,7 +102,7 @@ export function SettingsScreen() {
           </NavLink>
         </div>
       )}
-      {!isSupplier && <TopBar title="Profile" />}
+      {!isSupplier && <TopBar title="Profile" onBack={() => navigate(-1)} />}
 
       <div
         className="pad stack"

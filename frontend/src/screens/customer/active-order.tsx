@@ -131,7 +131,7 @@ export function ActiveOrder({ order, onCleared, onBack }: { order: Order; onClea
       <button
         type="button"
         className="tracking-back"
-        onClick={onBack}
+        onClick={() => onBack?.()}
         aria-label="Go back"
       >
         <Icon name="back" size={18} />

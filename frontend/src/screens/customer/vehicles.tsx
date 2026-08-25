@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { Icon } from "../../components/brand";
 import { EmptyState, Field, SelectField, TopBar } from "../../components/ui";
@@ -30,6 +30,7 @@ const BLANK: Draft = {
 export function VehiclesScreen({ standalone = true }: { standalone?: boolean }) {
   const { user, refresh } = useSession();
   const { notify } = useToast();
+  const navigate = useNavigate();
   const [vehicles, setVehicles] = useState<Vehicle[]>(user?.vehicles ?? []);
   const [editing, setEditing] = useState<Vehicle | null>(null);
   const [draft, setDraft] = useState<Draft>(BLANK);
@@ -122,6 +123,7 @@ export function VehiclesScreen({ standalone = true }: { standalone?: boolean }) 
     <div className="screen">
       <TopBar
         title="My vehicles"
+        onBack={standalone ? () => navigate(-1) : undefined}
         action={
           <button type="button" className="btn btn--sm" onClick={() => startEdit()}>
             <Icon name="plus" size={15} />
