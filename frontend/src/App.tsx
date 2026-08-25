@@ -17,7 +17,7 @@ const SupplierJobs = lazy(() => import("./screens/supplier").then((m) => ({ defa
 type Tab = { to: string; label: string; icon: IconName };
 
 const CUSTOMER_TABS: Tab[] = [
-  { to: "/", label: "Request", icon: "map" },
+  { to: "/", label: "Service", icon: "map" },
   { to: "/orders", label: "Orders", icon: "wallet" },
   { to: "/settings", label: "Profile", icon: "gear" },
 ];
@@ -45,7 +45,7 @@ function CustomerSidebar() {
   const navigate = useNavigate();
 
   const NAV_ITEMS: { to: string; label: string; icon: IconName }[] = [
-    { to: "/", label: "Request Fuel", icon: "map" },
+    { to: "/", label: "Request Service", icon: "map" },
     { to: "/orders", label: "My orders", icon: "wallet" },
     { to: "/vehicles", label: "My vehicles", icon: "truck" },
     { to: "/settings", label: "Profile & settings", icon: "gear" },
