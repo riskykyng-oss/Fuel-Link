@@ -64,6 +64,7 @@ export type SupplierProfile = {
 
 export type User = {
   id: number;
+  auth_id?: string;
   full_name: string;
   phone_number: string;
   email: string | null;
@@ -391,7 +392,31 @@ async function fetchUserProfile(authUserId: string): Promise<User> {
       .select("*")
       .eq("user_id", profile.id)
       .single();
-    supplier_profile = sp;
+    if (sp) {
+      supplier_profile = sp;
+    } else {
+      const { error: spInsertErr } = await supabase.from("supplier_profiles").insert({
+        user_id: profile.id,
+        company_name: profile.full_name + " Fuels",
+        zera_licence_number: "",
+        vehicle_registration: "",
+        tanker_capacity_litres: 200,
+        services_offered: "fuel",
+        provider_type: "fuel_station",
+        callout_fee: 0,
+        labour_rate: 0,
+        is_verified: true,
+        verification_status: "verified",
+      });
+      if (!spInsertErr) {
+        const { data: newSp } = await supabase
+          .from("supplier_profiles")
+          .select("*")
+          .eq("user_id", profile.id)
+          .single();
+        supplier_profile = newSp;
+      }
+    }
   }
 
   return {
@@ -488,6 +513,7 @@ export const api = {
       token_type: "bearer",
       user: {
         id: 0,
+        auth_id: data.user.id,
         full_name: full_name as string,
         phone_number: phone,
         email,
@@ -505,8 +531,7 @@ export const api = {
   registerSupplier: async (body: Record<string, unknown>): Promise<AuthResponse> => {
     const phone = normalizePhone(body.phone_number as string);
     const email = (body.email as string)?.trim() || phoneToEmail(body.phone_number as string);
-    const { full_name, password, company_name, zera_licence_number,
-      vehicle_registration, tanker_capacity_litres, services_offered } = body as Record<string, unknown>;
+    const { full_name, password, company_name } = body as Record<string, unknown>;
 
     if ((password as string).length < 6) throw new ApiError("Password must be at least 6 characters.", 400);
     if (!(full_name as string)?.trim()) throw new ApiError("Please enter the contact person's name.", 400);
@@ -548,26 +573,6 @@ export const api = {
       throw new ApiError("Could not create profile: " + insertError.message, 400);
     }
 
-    const { data: profile } = await supabase
-      .from("users").select("id").eq("auth_id", data.user.id).single();
-
-    if (profile) {
-      const { error: spError } = await supabase.from("supplier_profiles").insert({
-        user_id: profile.id,
-        company_name: company_name || "My Company",
-        zera_licence_number: zera_licence_number || "",
-        vehicle_registration: vehicle_registration || "",
-        tanker_capacity_litres: tanker_capacity_litres || 200,
-        services_offered: Array.isArray(services_offered) ? services_offered.join(",") : (services_offered || "fuel"),
-        provider_type: "fuel_station",
-        callout_fee: 0,
-        labour_rate: 0,
-        is_verified: true,
-        verification_status: "verified",
-      });
-      if (spError) console.error("[signup] Supplier profile error:", spError.message);
-    }
-
     if (data.session) {
       const user = await fetchUserProfile(data.user.id);
       return {
@@ -586,6 +591,7 @@ export const api = {
       token_type: "bearer",
       user: {
         id: 0,
+        auth_id: data.user.id,
         full_name: full_name as string,
         phone_number: phone,
         email,
@@ -601,25 +607,25 @@ export const api = {
   },
 
   me: async (): Promise<User> => {
-    const { data: { user: authUser } } = await supabase.auth.getUser();
-    if (!authUser) throw new ApiError("Not authenticated", 401);
-    return fetchUserProfile(authUser.id);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new ApiError("Not authenticated", 401);
+    return fetchUserProfile(session.user.id);
   },
 
   setTheme: async (theme: string): Promise<User> => {
-    const { data: { user: authUser } } = await supabase.auth.getUser();
-    if (!authUser) throw new ApiError("Not authenticated", 401);
-    await supabase.from("users").update({ theme }).eq("auth_id", authUser.id);
-    return fetchUserProfile(authUser.id);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new ApiError("Not authenticated", 401);
+    await supabase.from("users").update({ theme }).eq("auth_id", session.user.id);
+    return fetchUserProfile(session.user.id);
   },
 
   updateSupplierProfile: async (body: Record<string, unknown>): Promise<User> => {
-    const { data: { user: authUser } } = await supabase.auth.getUser();
-    if (!authUser) throw new ApiError("Not authenticated", 401);
-    const { data: profile } = await supabase.from("users").select("id").eq("auth_id", authUser.id).single();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new ApiError("Not authenticated", 401);
+    const { data: profile } = await supabase.from("users").select("id").eq("auth_id", session.user.id).single();
     if (!profile) throw new ApiError("Profile not found", 404);
     await supabase.from("supplier_profiles").update(body).eq("user_id", profile.id);
-    return fetchUserProfile(authUser.id);
+    return fetchUserProfile(session.user.id);
   },
 
   requestVerification: async (): Promise<User> => {

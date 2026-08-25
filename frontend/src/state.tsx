@@ -28,7 +28,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async () => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!session) {
+        try {
+          const me = await api.me();
+          setUser(me);
+        } catch {
+          setUser(null);
+        }
+        setReady(true);
+        return;
+      }
       try {
         const me = await api.me();
         setUser(me);
@@ -38,7 +48,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setReady(true);
     });
 
-    supabase.auth.getSession().then(async () => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) {
+        setUser(null);
+        setReady(true);
+        return;
+      }
       try {
         const me = await api.me();
         setUser(me);
