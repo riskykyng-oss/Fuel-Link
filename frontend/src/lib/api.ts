@@ -432,17 +432,22 @@ export const api = {
     if ((password as string).length < 6) throw new ApiError("Password must be at least 6 characters.", 400);
     if (!(full_name as string)?.trim()) throw new ApiError("Please enter your full name.", 400);
 
+    console.log("[signup] email:", email, "phone:", phone);
     const { data, error } = await supabase.auth.signUp({
       email,
       password: password as string,
       options: { data: { full_name, role: "customer", phone_number: phone } },
     });
     if (error) {
-      const msg = error.message.includes("already")
-        ? "An account with this phone number already exists. Try signing in."
-        : error.message.includes("valid")
-          ? "Please enter a valid phone number (e.g. 077 123 4567)."
-          : error.message;
+      console.error("[signup] Supabase error:", error.message, error.status, error);
+      let msg = error.message;
+      if (error.message.includes("already") || error.message.includes("already been registered")) {
+        msg = "An account with this phone number already exists. Try signing in.";
+      } else if (error.message.includes("rate") || error.message.includes("limit")) {
+        msg = "Too many signup attempts. Please wait a minute and try again.";
+      } else if (error.message.includes("valid")) {
+        msg = "Please enter a valid phone number (e.g. 077 123 4567).";
+      }
       throw new ApiError(msg, 400);
     }
 
@@ -505,11 +510,15 @@ export const api = {
       options: { data: { full_name, role: "supplier", phone_number: phone } },
     });
     if (error) {
-      const msg = error.message.includes("already")
-        ? "An account with this phone number already exists. Try signing in."
-        : error.message.includes("valid")
-          ? "Please enter a valid phone number (e.g. 077 123 4567)."
-          : error.message;
+      console.error("[signup] Supabase error:", error.message, error.status, error);
+      let msg = error.message;
+      if (error.message.includes("already") || error.message.includes("already been registered")) {
+        msg = "An account with this phone number already exists. Try signing in.";
+      } else if (error.message.includes("rate") || error.message.includes("limit")) {
+        msg = "Too many signup attempts. Please wait a minute and try again.";
+      } else if (error.message.includes("valid")) {
+        msg = "Please enter a valid phone number (e.g. 077 123 4567).";
+      }
       throw new ApiError(msg, 400);
     }
 
