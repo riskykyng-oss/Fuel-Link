@@ -28,14 +28,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!session) {
-        try {
-          const me = await api.me();
-          setUser(me);
-        } catch {
-          setUser(null);
-        }
+        setUser(null);
+        setReady(true);
+        return;
+      }
+      if (event === "SIGNED_IN" || event === "SIGNED_OUT") {
         setReady(true);
         return;
       }
