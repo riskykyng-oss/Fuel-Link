@@ -360,9 +360,10 @@ export class ApiError extends Error {
 }
 
 function normalizePhone(phone: string): string {
-  const raw = phone.replace(/\s+/g, "");
-  if (raw.startsWith("+")) return raw;
-  return "+263" + raw.replace(/^0/, "");
+  const digits = phone.replace(/\D/g, "");
+  if (digits.startsWith("263")) return "+" + digits;
+  if (digits.startsWith("0")) return "+263" + digits.slice(1);
+  return "+263" + digits;
 }
 
 function phoneToEmail(phone: string): string {
@@ -428,12 +429,22 @@ export const api = {
     const email = phoneToEmail(body.phone_number as string);
     const { full_name, password } = body;
 
+    if ((password as string).length < 6) throw new ApiError("Password must be at least 6 characters.", 400);
+    if (!(full_name as string)?.trim()) throw new ApiError("Please enter your full name.", 400);
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password: password as string,
       options: { data: { full_name, role: "customer", phone_number: phone } },
     });
-    if (error) throw new ApiError(error.message, 400);
+    if (error) {
+      const msg = error.message.includes("already")
+        ? "An account with this phone number already exists. Try signing in."
+        : error.message.includes("valid")
+          ? "Please enter a valid phone number (e.g. 077 123 4567)."
+          : error.message;
+      throw new ApiError(msg, 400);
+    }
 
     if (data.session && data.user) {
       const { error: insertError } = await supabase.from("users").insert({
@@ -484,12 +495,23 @@ export const api = {
     const { full_name, password, company_name, zera_licence_number,
       vehicle_registration, tanker_capacity_litres, services_offered } = body as Record<string, unknown>;
 
+    if ((password as string).length < 6) throw new ApiError("Password must be at least 6 characters.", 400);
+    if (!(full_name as string)?.trim()) throw new ApiError("Please enter the contact person's name.", 400);
+    if (!(company_name as string)?.trim()) throw new ApiError("Please enter your trading name.", 400);
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password: password as string,
       options: { data: { full_name, role: "supplier", phone_number: phone } },
     });
-    if (error) throw new ApiError(error.message, 400);
+    if (error) {
+      const msg = error.message.includes("already")
+        ? "An account with this phone number already exists. Try signing in."
+        : error.message.includes("valid")
+          ? "Please enter a valid phone number (e.g. 077 123 4567)."
+          : error.message;
+      throw new ApiError(msg, 400);
+    }
 
     if (data.session && data.user) {
       const { error: insertError } = await supabase.from("users").insert({
