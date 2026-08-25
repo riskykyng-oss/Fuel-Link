@@ -408,7 +408,8 @@ export const api = {
   },
 
   login: async (phone_number: string, password: string, role?: Role): Promise<AuthResponse> => {
-    const email = phoneToEmail(phone_number);
+    const input = phone_number.trim();
+    const email = input.includes("@") ? input : phoneToEmail(input);
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw new ApiError(error.message, 401);
 
@@ -426,11 +427,12 @@ export const api = {
 
   registerCustomer: async (body: Record<string, unknown>): Promise<AuthResponse> => {
     const phone = normalizePhone(body.phone_number as string);
-    const email = phoneToEmail(body.phone_number as string);
+    const email = (body.email as string)?.trim() || phoneToEmail(body.phone_number as string);
     const { full_name, password } = body;
 
     if ((password as string).length < 6) throw new ApiError("Password must be at least 6 characters.", 400);
     if (!(full_name as string)?.trim()) throw new ApiError("Please enter your full name.", 400);
+    if (!email.includes("@")) throw new ApiError("Please enter a valid email address.", 400);
 
     console.log("[signup] email:", email, "phone:", phone);
     const { data, error } = await supabase.auth.signUp({
@@ -496,13 +498,14 @@ export const api = {
 
   registerSupplier: async (body: Record<string, unknown>): Promise<AuthResponse> => {
     const phone = normalizePhone(body.phone_number as string);
-    const email = phoneToEmail(body.phone_number as string);
+    const email = (body.email as string)?.trim() || phoneToEmail(body.phone_number as string);
     const { full_name, password, company_name, zera_licence_number,
       vehicle_registration, tanker_capacity_litres, services_offered } = body as Record<string, unknown>;
 
     if ((password as string).length < 6) throw new ApiError("Password must be at least 6 characters.", 400);
     if (!(full_name as string)?.trim()) throw new ApiError("Please enter the contact person's name.", 400);
     if (!(company_name as string)?.trim()) throw new ApiError("Please enter your trading name.", 400);
+    if (!email.includes("@")) throw new ApiError("Please enter a valid email address.", 400);
 
     const { data, error } = await supabase.auth.signUp({
       email,

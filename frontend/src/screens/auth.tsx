@@ -447,11 +447,11 @@ export function AuthScreen() {
           )}
 
           <Field
-            label="Mobile number"
+            label={mode === "signin" ? "Phone or email" : "Mobile number"}
             value={form.phone_number}
             onChange={set("phone_number")}
-            placeholder="077 123 4567"
-            inputMode="tel"
+            placeholder={mode === "signin" ? "077 123 4567 or you@email.co.zw" : "077 123 4567"}
+            inputMode={mode === "signin" ? "text" : "tel"}
             required
             autoComplete="tel"
           />
@@ -470,11 +470,12 @@ export function AuthScreen() {
           {mode === "signup" && (
             <>
               <Field
-                label="Email (optional)"
+                label="Email address"
                 type="email"
                 value={form.email}
                 onChange={set("email")}
                 placeholder="you@example.co.zw"
+                required
                 autoComplete="email"
               />
 
